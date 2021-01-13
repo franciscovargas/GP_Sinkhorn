@@ -3,6 +3,7 @@ import torch
 from SDE_solver import solve_sde_RK
 from GP import MultitaskGPModel
 from tqdm import tqdm
+import gc
 
 def fit_drift(Xts,N,dt):
     X_0 = Xts[:, 0, 0].reshape(-1, 1)  # Extract starting point
@@ -40,7 +41,7 @@ def MLE_IPFP(X_0,X_1,N=10,sigma=1,iteration=10,prior_drift=None):
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         drift_forward = fit_drift(Xts,N=N,dt=dt)
-
+        gc.collect()
 
         # Estimate backward drift
         # Start from X_0 and roll until t=1 using drift_forward
@@ -54,4 +55,5 @@ def MLE_IPFP(X_0,X_1,N=10,sigma=1,iteration=10,prior_drift=None):
         T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
         T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
         result.append([T,M,T2,M2])
+        gc.collect()
     return result
