@@ -1,6 +1,8 @@
 import numpy as np
 import sys
 sys.path.append('./../src/')
+sys.path.append('./src/')
+
 from SDE_solver import solve_sde_RK
 from utils import plot_trajectories_2
 import matplotlib.pyplot as plt
@@ -8,7 +10,6 @@ from MLE_drift import *
 import torch
 
 from celluloid import Camera
-from IPython.display import HTML
 import math
 
 feature_x = np.arange(-1.5, 1.5, 0.05)
