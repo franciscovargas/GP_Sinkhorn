@@ -83,7 +83,7 @@ def MLE_IPFP(
              should also return the forwards and backwards drifts. 
     """
     if prior_drift is None:
-        prior_drift = lambda x: torch.tensor([0]*X_0.shape[1]).reshape((1,-1)).repeat(X_0.shape[0],1)
+        prior_drift = lambda x: torch.tensor([0]*(x.shape[1]-1)).reshape((1,-1)).repeat(x.shape[0],1)
         
     
     # Setup for the priors backwards drift estimate

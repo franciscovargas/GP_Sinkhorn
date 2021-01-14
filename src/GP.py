@@ -4,6 +4,11 @@ import pyro
 import math
 
 class MultitaskGPModel():
+    """
+    Independant (block diagonal K) Multioutput GP model
+    
+    Fits a seperate GP per dimension.
+    """
     def __init__(self, X, y, noise=.1, dt=1, ):
         self.dim = y.shape[1]
         self.gpr_list = []
@@ -27,21 +32,13 @@ class MultitaskGPModel():
 
         
 class MultitaskGPModelSparse(MultitaskGPModel):
-    @staticmethod
-    def create_inducing_points(X, num_data_points, num_time_points):
-        time_slice = X[:,-1]
-        t0, t1 = time_slice.min().item(), time_slice.max().item()
-
-        X0, X1 = X[:,:-1].min(0).values, X[:,:-1].max(0).values
-
-        X01 = X1 - X0
-        lin = torch.linspace(0,1, num_time_points)
-        space_points = X0 + lin.reshape(-1,1) * X01
-
-        space_points_n = space_points.repeat(num_data_points,1)
-        time_points = torch.linspace(t0,t1, num_time_points).repeat(num_data_points).reshape(-1,1)
-
-        return torch.cat((space_points_n, time_points), 1)
+    """
+    Nystr\"om approximation [Williams and Seeger, 2001] applied to multitask GP
+    
+    Time series are subsampled randomly in a hiearachical fashion.
+        - First sample a time series
+        - then subsample a fixed number of timepoints within the time series
+    """
     
     
     @staticmethod
