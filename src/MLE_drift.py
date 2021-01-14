@@ -23,13 +23,17 @@ def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
 
 def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
-        sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None
+        sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
+        num_data_points_prior=None, num_time_points_prior=None
     ):
     if prior_drift is None:
         prior_drift = lambda x: torch.tensor([0]*X_0.shape[1]).reshape((1,-1)).repeat(X_0.shape[0],1)
         
-    if prior_X_0 is None:
-        prior_X_0 = X_0
+    
+    # Setup for the priors backwards drift estimate
+    prior_X_0 = X_0 if prior_X_0 is None else prior_X_0        
+    num_data_points_prior = num_data_points if num_data_points_prior is None else num_data_points_prior
+    num_time_points_prior = num_time_points if num_time_points_prior is None else num_time_points_prior
         
     dt = 1.0 / N
     
@@ -40,7 +44,10 @@ def MLE_IPFP(
     #plot_trajectories_2(Xts, t)
 
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
-    drift_backward = fit_drift(Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points, num_time_points=num_time_points)
+    drift_backward = fit_drift(
+        Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points_prior,
+        num_time_points=num_time_points_prior
+    )
 
     result = []
     for i in tqdm(range(iteration)):
@@ -51,7 +58,10 @@ def MLE_IPFP(
 
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
-        drift_forward = fit_drift(Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points, num_time_points=num_time_points)
+        drift_forward = fit_drift(
+            Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
+            num_time_points=num_time_points
+        )
         gc.collect() # fixes odd memory leak
 
         # Estimate backward drift
@@ -60,7 +70,10 @@ def MLE_IPFP(
 
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
-        drift_backward = fit_drift(Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points, num_time_points=num_time_points)
+        drift_backward = fit_drift(
+            Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
+            num_time_points=num_time_points
+        )
 
 
         T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
