@@ -5,7 +5,30 @@ from GP import MultitaskGPModel, MultitaskGPModelSparse
 from tqdm import tqdm
 import gc
 
+
+
 def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
+    """
+    This function transforms a set of timeseries into an autoregression problem and
+    estimates the drift function using GPs following:
+    
+        - Papaspiliopoulos, Omiros, Yvo Pokern, Gareth O. Roberts, and Andrew M. Stuart.
+          "Nonparametric estimation of diffusions: a differential equations approach."
+          Biometrika 99, no. 3 (2012): 511-531.
+        - Ruttor, A., Batz, P., & Opper, M. (2013).
+          "Approximate Gaussian process inference for the drift function in stochastic differential equations."
+          Advances in Neural Information Processing Systems, 26, 2040-2048.
+    
+    :param Xts[MxNxD ndarray]: Array containing M timeseries of length N of dimension D
+    :param N [int]: Number of samples in the time series
+    :param dt [float]: time interval seperation between time points (sample rate)
+    
+    :param sparse[bool]: enables the Nystrom method if True
+    :param num_data_points[int]: Number of inducing samples(inducing points) from the boundary distributions
+    :param num_time_points[int]: Number of inducing timesteps(inducing points) for the EM approximation
+    
+    :return [nx(d+1) ndarray-> nxd ndarray]: returns fitted drift
+    """
     X_0 = Xts[:, 0, 0].reshape(-1, 1)  # Extract starting point
     Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1]) / dt).reshape((-1, Xts.shape[2] - 1)) # Autoregressive targets y = (X_{t+e} - X_t)/dt
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
@@ -19,13 +42,46 @@ def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
     return gp_ou_drift
 
 
-
-
 def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
         num_data_points_prior=None, num_time_points_prior=None
     ):
+    """
+    This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
+    well as a the forward drift of the prior \P and computes an estimate of the Schroedinger Bridge
+    of \P,\pi_0,\pi_1:
+    
+                        \Q* = \argmin_{\Q \in D(\pi_0, \pi_1)} KL(\Q || \P)
+    
+    :params X_0[nxd ndarray]: Source distribution sampled from \pi_0 (initial value for the bridge)
+    :params X_1[mxd ndarray]: Target distribution sampled from \pi_1 (terminal value for the bridge)
+    
+    :param N[int]: number of timesteps for Euler-Mayurama discretisations
+    :param iteration[int]: number of IPFP iterations
+    
+    :param prior_drift[nx(d+1) ndarray-> nxd ndarray]: drift function of the prior, defautls to Brownian
+    
+    :param sparse[bool]: This flag currently enables the Nystrom method. No variational opttimisation
+                         just random subsampling is used for the time being
+    :param num_data_points[int]: Number of inducing samples(inducing points) from the boundary distributions
+    :param num_time_points[int]: Number of inducing timesteps(inducing points) for the EM approximation
+    
+    :param prior_X_0[mxd array]: The marginal for the prior distribution \P . This is a free parameter
+                                 which can be tweaked to encourage exploration and improve results.
+     
+    :param num_data_points_prior[int]: number of data inducing points to use for the prior backwards drift
+                                       estimation prior to the IPFP loop and thus can afford to use more
+                                       samples here than with `num_data_points`. Note starting off IPFP
+                                       with a very good estimate of the backwards drift of the prior is
+                                       very important and thus it is encouraged to be generous with this
+                                       parameter.
+    :param num_time_points_prior[int]: number of time step inducing points to use for the prior backwards
+                                       drift estimation. Same comments as with `num_data_points_prior`.
+    
+    :return: At the moment returning the fitted forwards and backwards timeseries for plotting. However
+             should also return the forwards and backwards drifts. 
+    """
     if prior_drift is None:
         prior_drift = lambda x: torch.tensor([0]*X_0.shape[1]).reshape((1,-1)).repeat(X_0.shape[0],1)
         
@@ -62,7 +118,7 @@ def MLE_IPFP(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points
         )
-        gc.collect() # fixes odd memory leak
+        gc.collect() # fixes (partially) odd memory leak
 
         # Estimate backward drift
         # Start from X_0 and roll until t=1 using drift_forward
