@@ -55,14 +55,15 @@ num_time_points_prior = N
 # random subsampling, should not affect interpretability much, ive tested it in all our experiments
 # works surprisingly well
 result = MLE_IPFP(
-    X_0,X_1,N=N,sigma=sigma, iteration=25, sparse=True, 
+    X_0,X_1,N=N,sigma=sigma, iteration=6, sparse=True, 
     num_data_points=data_inducing_points, num_time_points=time_inducing_points, prior_X_0=prior_X_0,
     num_data_points_prior=num_data_points_prior, num_time_points_prior=num_time_points_prior
 )
 
 # Plot trajectories
 for i in range(20):
-    plt.plot(result[1][i,:,0], result[1][i,:,1])
+    # import pdb; pdb.set_trace()
+    plt.plot(result[-1][1][i,:,0].cpu().detach().numpy(), result[-1][1][i,:,0].cpu().detach().numpy())
 
-plt.savefig("./assets/trajectories_EB.png")
+plt.savefig("../assets/trajectories_EB.png")
 
