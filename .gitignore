@@ -129,5 +129,5 @@ dmypy.json
 .pyre/
 
 # repo specific
-.data/*
-*.npz
+#.data/*
+#*.npz
