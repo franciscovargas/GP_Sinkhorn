@@ -1,7 +1,7 @@
 
 import torch
-from SDE_solver import solve_sde_RK
-from GP import MultitaskGPModel, MultitaskGPModelSparse
+from gp_sinkhorn.SDE_solver import solve_sde_RK
+from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
 from tqdm import tqdm
 import gc
 
