@@ -61,7 +61,7 @@ result = MLE_IPFP(
 )
 
 # Plot trajectories
-for i in range(20):
+for i in range(len(result[-1][1])):
     # import pdb; pdb.set_trace()
     plt.plot(result[-1][1][i,:,0].cpu().detach().numpy(), result[-1][1][i,:,1].cpu().detach().numpy())
 
