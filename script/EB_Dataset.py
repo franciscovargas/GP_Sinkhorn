@@ -65,5 +65,10 @@ for i in range(20):
     # import pdb; pdb.set_trace()
     plt.plot(result[-1][1][i,:,0].cpu().detach().numpy(), result[-1][1][i,:,1].cpu().detach().numpy())
 
+
+scprep.plot.scatter2d(X_0_f, c='Blue', alpha=0.1, ax=ax)
+scprep.plot.scatter2d(X_1_f, c='Red', alpha=0.1, ax=ax)
+scprep.plot.scatter2d(X_1.detach().cpu().numpy(), c='Green', alpha=0.7, ax=ax)
+
 plt.savefig("../assets/trajectories_EB.png")
 
