@@ -63,7 +63,7 @@ result = MLE_IPFP(
 # Plot trajectories
 for i in range(20):
     # import pdb; pdb.set_trace()
-    plt.plot(result[-1][1][i,:,0].cpu().detach().numpy(), result[-1][1][i,:,0].cpu().detach().numpy())
+    plt.plot(result[-1][1][i,:,0].cpu().detach().numpy(), result[-1][1][i,:,1].cpu().detach().numpy())
 
 plt.savefig("../assets/trajectories_EB.png")
 
