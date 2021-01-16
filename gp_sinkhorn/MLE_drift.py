@@ -90,6 +90,7 @@ def MLE_IPFP(
     prior_X_0 = X_0 if prior_X_0 is None else prior_X_0        
     num_data_points_prior = num_data_points if num_data_points_prior is None else num_data_points_prior
     num_time_points_prior = num_time_points if num_time_points_prior is None else num_time_points_prior
+    drift_forward = None
         
     dt = 1.0 / N
     
@@ -114,6 +115,9 @@ def MLE_IPFP(
 
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
+        del drift_forward
+        gc.collect()
+
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points
@@ -126,6 +130,8 @@ def MLE_IPFP(
 
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
+        del drift_backward
+        gc.collect()
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points

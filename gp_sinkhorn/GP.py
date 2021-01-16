@@ -24,13 +24,13 @@ class MultitaskGPModel():
         """
         self.dim = y.shape[1]
         self.gpr_list = []
-        
-        kernel = kern(input_dim=X.shape[1]) # changed from Matern32
-        for i in range(y.shape[1]):
-            gpr = gp.models.GPRegression(
-                X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt))
-            )
-            self.gpr_list.append(gpr)
+        with torch.no_grad():
+            kernel = kern(input_dim=X.shape[1]) # changed from Matern32
+            for i in range(y.shape[1]):
+                gpr = gp.models.GPRegression(
+                    X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt))
+                )
+                self.gpr_list.append(gpr)
 
     def predict(self, X):
         """
@@ -41,12 +41,13 @@ class MultitaskGPModel():
         :param X[nxd' ndarray]: state + time vector inputs to evaluate
                                 GPDrift on
         """
-        mean_list = []
-        for gpr in self.gpr_list:
-            mean, _ = gpr(X, full_cov=True, noiseless=True)
+        with torch.no_grad():
+            mean_list = []
+            for gpr in self.gpr_list:
+                mean, _ = gpr(X, full_cov=True, noiseless=True)
 
-            mean_list.append(mean.double().reshape((-1, 1)))
-        return torch.cat(mean_list, dim=1)
+                mean_list.append(mean.double().reshape((-1, 1)))
+            return torch.cat(mean_list, dim=1)
     
     def fit_gp(self, num_steps=30):
         """
