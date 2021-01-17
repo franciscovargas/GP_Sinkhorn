@@ -42,7 +42,6 @@ class GPRegression_fast(gp.models.GPRegression):
             Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
             Lff = Kff.cholesky()
         else:
-            print("Reuse chol")
             Lff = reuse_chol
 
 
@@ -100,13 +99,10 @@ class MultitaskGPModel():
         """
         with torch.no_grad():
             mean_list = []
-            print("Fit new GP")
             Lff = None
             for gpr in self.gpr_list:
-                start = time.time()
                 # your code here
                 mean, _, Lff = gpr(X, full_cov=True, noiseless=True,reuse_chol=Lff)
-                print("GP run time: ",time.time() - start)
                 mean_list.append(mean.double().reshape((-1, 1)))
             return torch.cat(mean_list, dim=1)
     
