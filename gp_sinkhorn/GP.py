@@ -113,7 +113,6 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
         pack = torch.cat((f_loc_2D, Kfs), dim=1)
         if f_scale_tril is not None:
             pack = torch.cat((pack, f_scale_tril_2D), dim=1)
-        t = time.time()
         Lffinv_pack = pack.triangular_solve(Lff, upper=False)[0]
         # unpack
         v_2D = Lffinv_pack[:, :f_loc_2D.size(1)]
@@ -157,15 +156,15 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
 
 class GPRegression_fast(gp.models.GPRegression):
 
-    def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6,precompute_chol=None):
+    def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6,precompute_inv=None):
         super().__init__(X, y, kernel, mean_function=mean_function, jitter=jitter,noise=noise)
-        if precompute_chol == None:
+        if precompute_inv == None:
             N = self.X.size(0)
             Kff = self.kernel(self.X).contiguous()
             Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
-            self.Lff = Kff.cholesky()
+            self.Kff_inv = torch.cholesky_inverse(Kff)
         else:
-            self.Lff = precompute_chol
+            self.Kff_inv = precompute_inv
 
     def forward(self, Xnew, full_cov=False, noiseless=True,reuse_chol=None):
         r"""
@@ -192,17 +191,12 @@ class GPRegression_fast(gp.models.GPRegression):
         N = self.X.size(0)
 
         y_residual = self.y - self.mean_function(self.X)
-        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, self.Lff,
-                               full_cov, jitter=self.jitter)
 
-        if full_cov and not noiseless:
-            M = Xnew.size(0)
-            cov = cov.contiguous()
-            cov.view(-1, M * M)[:, ::M + 1] += self.noise  # add noise to the diagonal
-        if not full_cov and not noiseless:
-            cov = cov + self.noise
+        Kfs = self.kernel(self.X, Xnew)
 
-        return loc + self.mean_function(Xnew), cov
+        loc = torch.mm(torch.mm(Kfs.T,self.Kff_inv),y_residual.reshape((-1,1)))
+
+        return loc + self.mean_function(Xnew)
 
 
 class MultitaskGPModel():
@@ -235,7 +229,7 @@ class MultitaskGPModel():
                     )
                 else:
                     gpr = GPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)),precompute_chol=self.gpr_list[0].Lff
+                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)),precompute_inv=self.gpr_list[0].Kff_inv
                     )
                 self.gpr_list.append(gpr)
 
@@ -253,7 +247,7 @@ class MultitaskGPModel():
             Lff = None
             for gpr in self.gpr_list:
                 # your code here
-                mean, _ = gpr(X, full_cov=True, noiseless=True)
+                mean = gpr(X, full_cov=True, noiseless=True)
                 mean_list.append(mean.double().reshape((-1, 1)))
             return torch.cat(mean_list, dim=1)
     
