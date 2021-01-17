@@ -4,7 +4,7 @@ from gp_sinkhorn.SDE_solver import solve_sde_RK
 from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
 from tqdm import tqdm
 import gc
-
+import copy
 
 
 def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
@@ -114,37 +114,35 @@ def MLE_IPFP(
         # Start from the end X_1 and then roll until t=0
         t, Xts = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
         #plot_trajectories_2(Xts, t)
-
+        T2,M2 = copy.deepcopy(t),copy.deepcopy(Xts)
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
-        del drift_forward
-        gc.collect()
         print("Fit forward drift ")
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points
         )
-        gc.collect() # fixes (partially) odd memory leak
-
         # Estimate backward drift
         # Start from X_0 and roll until t=1 using drift_forward
         print("Solve forward sde")
         t, Xts = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
+        T,M = copy.deepcopy(t),copy.deepcopy(Xts)
 
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
-        del drift_backward
-        gc.collect()
         print("Fit backward sde")
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points
         )
 
-        print("Solve backward and forward sde")
-        T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
-        T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
-        result.append([T,M,T2,M2])
+        result.append([T, M, T2, M2])
         gc.collect() # fixes odd memory leak
         pickle.dump(result,open("./../assets/result_dump/result_"+str(i)+".pkl","wb"))
+
+    T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)
+    T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N)
+    result.append([T, M, T2, M2])
+    pickle.dump(result, open("./../assets/result_dump/result_final.pkl", "wb"))
+
     return result
