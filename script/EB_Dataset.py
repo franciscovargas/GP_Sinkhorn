@@ -31,7 +31,7 @@ X_1_f = ds.get_data()[frame_4_start:frame_4_end]
 # Subsample terminals
 perm_0 = np.random.permutation(np.arange(len(X_0_f)))
 perm_1 = np.random.permutation(np.arange(len(X_1_f)))
-k = 2
+k = 20
 
 X_0 = torch.tensor(X_0_f[perm_0][:])
 X_1 = torch.tensor(X_1_f[perm_1][:])

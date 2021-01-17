@@ -1,7 +1,65 @@
 import torch
 import pyro.contrib.gp as gp
-import pyro
 import math
+import pyro
+from pyro.contrib.gp.util import conditional
+
+
+import time
+
+
+class GPRegression_fast(gp.models.GPRegression):
+
+    def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
+        super().__init__(X, y, kernel, mean_function=mean_function, jitter=jitter,noise=noise)
+        self.Lff = None
+
+    def forward(self, Xnew, full_cov=False, noiseless=True,reuse_chol=False):
+        r"""
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data :math:`X_{new}`:
+
+        .. math:: p(f^* \mid X_{new}, X, y, k, \epsilon) = \mathcal{N}(loc, cov).
+
+        .. note:: The noise parameter ``noise`` (:math:`\epsilon`) together with
+            kernel's parameters have been learned from a training procedure (MCMC or
+            SVI).
+
+        :param torch.Tensor Xnew: A input data for testing. Note that
+            ``Xnew.shape[1:]`` must be the same as ``self.X.shape[1:]``.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
+        :param bool noiseless: A flag to decide if we want to include noise in the
+            prediction output or not.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
+        """
+        self._check_Xnew_shape(Xnew)
+        self.set_mode("guide")
+
+        N = self.X.size(0)
+        Kff = self.kernel(self.X).contiguous()
+        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
+        if self.Lff == None and reuse_chol:
+            Lff = self.Lff
+        else:
+            Lff = Kff.cholesky()
+            self.Lff = Lff
+
+
+        y_residual = self.y - self.mean_function(self.X)
+        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, Lff,
+                               full_cov, jitter=self.jitter)
+
+        if full_cov and not noiseless:
+            M = Xnew.size(0)
+            cov = cov.contiguous()
+            cov.view(-1, M * M)[:, ::M + 1] += self.noise  # add noise to the diagonal
+        if not full_cov and not noiseless:
+            cov = cov + self.noise
+
+        return loc + self.mean_function(Xnew), cov
+
 
 class MultitaskGPModel():
     """
@@ -27,7 +85,7 @@ class MultitaskGPModel():
         with torch.no_grad():
             kernel = kern(input_dim=X.shape[1]) # changed from Matern32
             for i in range(y.shape[1]):
-                gpr = gp.models.GPRegression(
+                gpr = GPRegression_fast(
                     X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt))
                 )
                 self.gpr_list.append(gpr)
@@ -44,8 +102,10 @@ class MultitaskGPModel():
         with torch.no_grad():
             mean_list = []
             for gpr in self.gpr_list:
-                mean, _ = gpr(X, full_cov=True, noiseless=True)
-
+                start = time.time()
+                # your code here
+                mean, _ = gpr(X, full_cov=True, noiseless=True,reuse_chol=True)
+                print("GP run time: ",time.time() - start)
                 mean_list.append(mean.double().reshape((-1, 1)))
             return torch.cat(mean_list, dim=1)
     
