@@ -12,9 +12,8 @@ class GPRegression_fast(gp.models.GPRegression):
 
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
         super().__init__(X, y, kernel, mean_function=mean_function, jitter=jitter,noise=noise)
-        self.Lff = None
 
-    def forward(self, Xnew, full_cov=False, noiseless=True,reuse_chol=False):
+    def forward(self, Xnew, full_cov=False, noiseless=True,reuse_chol=None):
         r"""
         Computes the mean and covariance matrix (or variance) of Gaussian Process
         posterior on a test input data :math:`X_{new}`:
@@ -36,15 +35,15 @@ class GPRegression_fast(gp.models.GPRegression):
         """
         self._check_Xnew_shape(Xnew)
         self.set_mode("guide")
-
         N = self.X.size(0)
-        Kff = self.kernel(self.X).contiguous()
-        Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
-        if self.Lff != None and reuse_chol:
-            Lff = self.Lff
-        else:
+
+        if reuse_chol == None:
+            Kff = self.kernel(self.X).contiguous()
+            Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
             Lff = Kff.cholesky()
-            self.Lff = Lff
+        else:
+            print("Reuse chol")
+            Lff = reuse_chol
 
 
         y_residual = self.y - self.mean_function(self.X)
@@ -58,7 +57,7 @@ class GPRegression_fast(gp.models.GPRegression):
         if not full_cov and not noiseless:
             cov = cov + self.noise
 
-        return loc + self.mean_function(Xnew), cov
+        return loc + self.mean_function(Xnew), cov, Lff
 
 
 class MultitaskGPModel():
@@ -101,10 +100,12 @@ class MultitaskGPModel():
         """
         with torch.no_grad():
             mean_list = []
+            print("Fit new GP")
+            Lff = None
             for gpr in self.gpr_list:
                 start = time.time()
                 # your code here
-                mean, _ = gpr(X, full_cov=True, noiseless=True,reuse_chol=True)
+                mean, _, Lff = gpr(X, full_cov=True, noiseless=True,reuse_chol=Lff)
                 print("GP run time: ",time.time() - start)
                 mean_list.append(mean.double().reshape((-1, 1)))
             return torch.cat(mean_list, dim=1)
