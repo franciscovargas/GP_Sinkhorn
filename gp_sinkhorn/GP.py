@@ -45,8 +45,8 @@ class GPRegression_fast(gp.models.GPRegression):
         N = self.X.size(0)
 
         y_residual = self.y - self.mean_function(self.X)
-        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None, self.Lff,
-                               full_cov, jitter=self.jitter)
+        loc, cov = conditional(Xnew, self.X, self.kernel, y_residual, None,
+                               full_cov, jitter=self.jitter, Lff=self.Lff)
 
         if full_cov and not noiseless:
             M = Xnew.size(0)
