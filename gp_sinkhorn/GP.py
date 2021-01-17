@@ -22,7 +22,7 @@ class GPRegression_fast(gp.models.GPRegression):
             N = self.X.size(0)
             Kff = self.kernel(self.X).contiguous()
             Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
-            self.Kff_inv = torch.cholesky_inverse(Kff)
+            self.Kff_inv = torch.inverse(Kff)
         else:
             self.Kff_inv = precompute_inv
 
@@ -56,7 +56,6 @@ class GPRegression_fast(gp.models.GPRegression):
             reuse_kernel = torch.mm(Kfs.T,self.Kff_inv)
 
         loc = torch.mm(reuse_kernel,y_residual.reshape((-1,1)))
-
 
         return loc + self.mean_function(Xnew),reuse_kernel
 
