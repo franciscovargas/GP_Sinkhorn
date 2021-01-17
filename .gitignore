@@ -131,3 +131,6 @@ dmypy.json
 # repo specific
 #.data/*
 #*.npz
+data/preprocessed_ebt_counts.pkl
+data/preprocessed_ebt_counts_labels.pkl
+assets/result_dump/*.pkl
