@@ -101,12 +101,14 @@ def MLE_IPFP(
     #plot_trajectories_2(Xts, t)
 
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
+    print("Fit prior drift")
     drift_backward = fit_drift(
         Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior
     )
 
     result = []
+    print("Start iteratioj")
     for i in tqdm(range(iteration)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
@@ -117,6 +119,7 @@ def MLE_IPFP(
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         del drift_forward
         gc.collect()
+        print("Fit forward drift ")
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points
@@ -125,18 +128,20 @@ def MLE_IPFP(
 
         # Estimate backward drift
         # Start from X_0 and roll until t=1 using drift_forward
+        print("Solve forward sde")
         t, Xts = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
 
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         del drift_backward
         gc.collect()
+        print("Fit backward sde")
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points
         )
 
-
+        print("Solve backward and forward sde")
         T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
         T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
         result.append([T,M,T2,M2])
