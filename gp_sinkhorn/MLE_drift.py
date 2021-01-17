@@ -108,7 +108,7 @@ def MLE_IPFP(
     )
 
     result = []
-    print("Start iteratioj")
+    print("Start iteration")
     for i in tqdm(range(iteration)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0

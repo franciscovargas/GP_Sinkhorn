@@ -89,13 +89,11 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
     latent_shape = f_loc.shape[:-1]
 
     if Lff is None:
-        print("SHOULD NOT GO THERE ")
         Kff = kernel(X).contiguous()
         Kff.view(-1)[::N + 1] += jitter  # add jitter to diagonal
         Lff = Kff.cholesky()
     t = time.time()
     Kfs = kernel(X, Xnew)
-    print("Kernel ",time.time()-t)
     # convert f_loc_shape from latent_shape x N to N x latent_shape
     f_loc = f_loc.permute(-1, *range(len(latent_shape)))
     # convert f_loc to 2D tensor for packing
@@ -117,7 +115,6 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
             pack = torch.cat((pack, f_scale_tril_2D), dim=1)
         t = time.time()
         Lffinv_pack = pack.triangular_solve(Lff, upper=False)[0]
-        print("Trig ",time.time()-t)
         # unpack
         v_2D = Lffinv_pack[:, :f_loc_2D.size(1)]
         W = Lffinv_pack[:, f_loc_2D.size(1):f_loc_2D.size(1) + M].t()
@@ -156,7 +153,6 @@ def conditional(Xnew, X, kernel, f_loc, f_scale_tril=None, Lff=None, full_cov=Fa
             cov = cov.expand(latent_shape + (M, M))
         else:
             var = var.expand(latent_shape + (M,))
-    print("Total exec ",time.time() - start_time)
     return (loc, cov) if full_cov else (loc, var)
 
 class GPRegression_fast(gp.models.GPRegression):
