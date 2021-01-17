@@ -1,4 +1,4 @@
-
+import pickle
 import torch
 from gp_sinkhorn.SDE_solver import solve_sde_RK
 from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
@@ -142,4 +142,5 @@ def MLE_IPFP(
         T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
         result.append([T,M,T2,M2])
         gc.collect() # fixes odd memory leak
+        pickle.dump(result,open("./../assets/result_dump/result_"+str(i)+".pkl","wb"))
     return result
