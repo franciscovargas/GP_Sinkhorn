@@ -40,7 +40,7 @@ class GPRegression_fast(gp.models.GPRegression):
         N = self.X.size(0)
         Kff = self.kernel(self.X).contiguous()
         Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
-        if self.Lff == None and reuse_chol:
+        if self.Lff != None and reuse_chol:
             Lff = self.Lff
         else:
             Lff = Kff.cholesky()
