@@ -8,9 +8,7 @@ import torch
 from pyro.infer import TraceMeanField_ELBO
 from pyro.infer.util import torch_backward, torch_item
 
-
 import time
-
 
 
 
@@ -59,6 +57,78 @@ class GPRegression_fast(gp.models.GPRegression):
 
         return loc + self.mean_function(Xnew),reuse_kernel
 
+
+class SparseGPRegression_fast(gp.models.SparseGPRegression):
+
+    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, jitter=1e-6,precompute_inv=None):
+        super().__init__(X, y, kernel, Xu, mean_function=mean_function, jitter=jitter,noise=noise)
+        if precompute_inv == None:
+            N = self.X.size(0)
+            M = self.Xu.size(0)
+
+            Kuu = self.kernel(self.Xu).contiguous()
+            Kuu.view(-1)[::M + 1] += self.jitter  # add jitter to the diagonal
+            self.Luu = Kuu.cholesky()
+
+            Kuf = self.kernel(self.Xu, self.X)
+
+            W = Kuf.triangular_solve(self.Luu, upper=False)[0]
+            D = self.noise.expand(N)
+
+            self.W_Dinv = W / D
+            K = self.W_Dinv.matmul(W.t()).contiguous()
+            K.view(-1)[::M + 1] += 1  # add identity matrix to K
+            self.L = K.cholesky()
+        else:
+            self.Luu, self.L, self.W_Dinv = precompute_inv
+    
+    def forward(self, Xnew, full_cov=False, noiseless=True, reuse_kernel=None):
+        r"""
+        Computes the mean and covariance matrix (or variance) of Gaussian Process
+        posterior on a test input data :math:`X_{new}`:
+        .. math:: p(f^* \mid X_{new}, X, y, k, X_u, \epsilon) = \mathcal{N}(loc, cov).
+        .. note:: The noise parameter ``noise`` (:math:`\epsilon`), the inducing-point
+            parameter ``Xu``, together with kernel's parameters have been learned from
+            a training procedure (MCMC or SVI).
+        :param torch.Tensor Xnew: A input data for testing. Note that
+            ``Xnew.shape[1:]`` must be the same as ``self.X.shape[1:]``.
+        :param bool full_cov: A flag to decide if we want to predict full covariance
+            matrix or just variance.
+        :param bool noiseless: A flag to decide if we want to include noise in the
+            prediction output or not.
+        :returns: loc and covariance matrix (or variance) of :math:`p(f^*(X_{new}))`
+        :rtype: tuple(torch.Tensor, torch.Tensor)
+        """
+        self._check_Xnew_shape(Xnew)
+
+        N = self.X.size(0)
+        M = self.Xu.size(0)
+        
+        # get y_residual and convert it into 2D tensor for packing
+        y_residual = self.y - self.mean_function(self.X)
+        y_2D = y_residual.reshape(-1, N).t()
+        W_Dinv_y = self.W_Dinv.matmul(y_2D)
+        
+        if reuse_kernel is None:           
+
+            Kus = self.kernel(self.Xu, Xnew)
+            Ws = Kus.triangular_solve(self.Luu, upper=False)[0]
+            reuse_kernel = Ws
+            
+        pack = torch.cat((W_Dinv_y, reuse_kernel), dim=1)
+        Linv_pack = pack.triangular_solve(self.L, upper=False)[0]
+            
+        # unpack
+        Linv_W_Dinv_y = Linv_pack[:, :W_Dinv_y.shape[1]]
+        Linv_Ws = Linv_pack[:, W_Dinv_y.shape[1]:]
+
+        C = Xnew.size(0)
+        loc_shape = self.y.shape[:-1] + (C,)
+        
+        loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).reshape(loc_shape)
+
+        return loc + self.mean_function(Xnew), reuse_kernel
+    
 
 class MultitaskGPModel():
     """
@@ -163,7 +233,8 @@ class MultitaskGPModelSparse(MultitaskGPModel):
 
         # Sample timepoints without replacement for each timeseries
         prob_dist = torch.ones((num_data_points, original_time_length))
-        inx_matrix = torch.multinomial(prob_dist, num_time_points, replacement=False) * torch.arange(1, num_data_points+1).reshape(-1,1)
+        inx_matrix = torch.multinomial(prob_dist, num_time_points, replacement=False) \
+                        * torch.arange(1, num_data_points+1).reshape(-1,1)
         out_samps = samples[inx_matrix.flatten(),:]
      
         return out_samps
@@ -190,16 +261,28 @@ class MultitaskGPModelSparse(MultitaskGPModel):
         """
         self.dim = y.shape[1]
         self.gpr_list = []
-        
-        self.nystrom_only = nystrom_only
-        Xu = self.create_inducing_points_nystrom(X, num_data_points, num_time_points)
-        
-        kernel = kern(input_dim=X.shape[1]) # changed from Matern32
-        for i in range(y.shape[1]):
-            gpr = gp.models.SparseGPRegression(
-                X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)), Xu=Xu
-            )
-            self.gpr_list.append(gpr)
+        with torch.no_grad():
+            self.nystrom_only = nystrom_only
+            Xu = self.create_inducing_points_nystrom(X, num_data_points, num_time_points)
+
+            kernel = kern(input_dim=X.shape[1]) # changed from Matern32
+            for i in range(y.shape[1]):
+                
+                if i == 0:
+                    gpr = SparseGPRegression_fast(
+                    X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)), Xu=Xu
+                    )
+                else:
+                    gpr = SparseGPRegression_fast(
+                        X, y[:, i], kernel,
+                        noise=torch.tensor(noise / math.sqrt(dt)),
+                        Xu=Xu, precompute_inv=(
+                            self.gpr_list[0].Luu,
+                            self.gpr_list[0].L,
+                            self.gpr_list[0].W_Dinv
+                        )
+                    )
+                self.gpr_list.append(gpr)
     
     def fit_gp(self, num_steps=30):
         """
