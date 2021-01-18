@@ -58,7 +58,7 @@ def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
-        kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1,
+        kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -126,7 +126,9 @@ def MLE_IPFP(
         plot_trajectories_2(Xts, t)
 
     result = []
-    for i in tqdm(range(iteration)):
+    
+    iterations = iteration + refinement_iterations if sigma != 1.0 else iteration
+    for i in tqdm(range(iterations)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
         t, Xts = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
@@ -154,7 +156,7 @@ def MLE_IPFP(
             plot_trajectories_2(M2, T2)
             plot_trajectories_2(M, T, color='r')
         result.append([T, M, T2, M2])
-        sigma *= decay_sigma
+        if i < iteration: sigma *= decay_sigma
         gc.collect() # fixes odd memory leak
         pickle.dump(result,open(log_dir+ "result_"+str(i)+".pkl","wb"))
 
@@ -163,5 +165,5 @@ def MLE_IPFP(
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N)
     result.append([T, M, T2, M2])
     pickle.dump(result, open(log_dir+"result_final.pkl", "wb"))
-
+    print(sigma)
     return result
