@@ -96,7 +96,7 @@ def MLE_IPFP(
     :return: At the moment returning the fitted forwards and backwards timeseries for plotting. However
              should also return the forwards and backwards drifts. 
     """
-    log_dir = os.environ["LOG_DIR"]
+    log_dir = os.environ["DIR_LOG"]
     if prior_drift is None:
         prior_drift = lambda x: torch.tensor([0]*(x.shape[1]-1)).reshape((1,-1)).repeat(x.shape[0],1)
         
