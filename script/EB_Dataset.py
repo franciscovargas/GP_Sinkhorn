@@ -33,8 +33,11 @@ perm_0 = np.random.permutation(np.arange(len(X_0_f)))
 perm_1 = np.random.permutation(np.arange(len(X_1_f)))
 k = 20
 
-X_0 = torch.tensor(X_0_f[perm_0][:])
-X_1 = torch.tensor(X_1_f[perm_1][:])
+# X_0 = torch.tensor(X_0_f[perm_0][:])
+# X_1 = torch.tensor(X_1_f[perm_1][:])
+
+X_0 = torch.tensor(X_0_f)
+X_1 = torch.tensor(X_1_f)
 
 
 # SDE Solver config
