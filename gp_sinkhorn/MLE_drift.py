@@ -4,13 +4,18 @@ from gp_sinkhorn.SDE_solver import solve_sde_RK
 from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
 from gp_sinkhorn.utils import plot_trajectories_2
 import matplotlib.pyplot as plt
+import pyro.contrib.gp as gp
 
 from tqdm import tqdm
 import gc
 import copy
 
 
-def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
+def fit_drift(
+    Xts,N,dt, sparse=False,
+    num_data_points=10, num_time_points=50,
+    kernel=gp.kernels.RBF, noise=1.0
+    ):
     """
     This function transforms a set of timeseries into an autoregression problem and
     estimates the drift function using GPs following:
@@ -36,10 +41,13 @@ def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
     Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1]) / dt).reshape((-1, Xts.shape[2] - 1)) # Autoregressive targets y = (X_{t+e} - X_t)/dt
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
     if sparse:
-        gp_drift_model = MultitaskGPModelSparse(Xs, Ys, num_data_points=num_data_points, num_time_points=num_time_points)
+        gp_drift_model = MultitaskGPModelSparse(
+            Xs, Ys, num_data_points=num_data_points, num_time_points=num_time_points,
+            kern=kernel, noise=noise
+        )
         gp_drift_model.fit_gp()
     else:
-        gp_drift_model = MultitaskGPModel(Xs, Ys)  # Setup the GP
+        gp_drift_model = MultitaskGPModel(Xs, Ys, kern=kernel, noise=noise)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
     gp_ou_drift = lambda x: gp_drift_model.predict(x)  # Extract mean drift
     return gp_ou_drift
@@ -48,7 +56,8 @@ def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
 def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
-        num_data_points_prior=None, num_time_points_prior=None, plot=False
+        num_data_points_prior=None, num_time_points_prior=None, plot=False,
+        kernel=gp.kernels.RBF, observation_noise=1.0
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -106,7 +115,7 @@ def MLE_IPFP(
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
     drift_backward = fit_drift(
         Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points_prior,
-        num_time_points=num_time_points_prior
+        num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise
     )
     
     if plot:
@@ -125,7 +134,7 @@ def MLE_IPFP(
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
-            num_time_points=num_time_points
+            num_time_points=num_time_points, kernel=kernel, noise=observation_noise
         )
         # Estimate backward drift
         # Start from X_0 and roll until t=1 using drift_forward
@@ -136,7 +145,7 @@ def MLE_IPFP(
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
-            num_time_points=num_time_points
+            num_time_points=num_time_points, kernel=kernel, noise=observation_noise
         )
         if plot:
             plot_trajectories_2(M2, T2)
