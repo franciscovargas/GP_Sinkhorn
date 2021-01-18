@@ -2,6 +2,9 @@ import pickle
 import torch
 from gp_sinkhorn.SDE_solver import solve_sde_RK
 from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
+from gp_sinkhorn.utils import plot_trajectories_2
+import matplotlib.pyplot as plt
+
 from tqdm import tqdm
 import gc
 import copy
@@ -45,7 +48,7 @@ def fit_drift(Xts,N,dt, sparse=False, num_data_points=10, num_time_points=50):
 def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
-        num_data_points_prior=None, num_time_points_prior=None
+        num_data_points_prior=None, num_time_points_prior=None, plot=False
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -98,19 +101,24 @@ def MLE_IPFP(
     # Start in prior_X_0 and go forward. Then flip the series and learn a backward drift: drift_backward
 
     t, Xts = solve_sde_RK(b_drift=prior_drift, sigma=sigma, X0=prior_X_0, dt=dt, N=N)
-    #plot_trajectories_2(Xts, t)
+    if plot: plot_trajectories_2(Xts, t)
 
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
     drift_backward = fit_drift(
         Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior
     )
+    
+    if plot:
+        t, Xts = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=Xts[:,0,:-1],dt=dt, N=N)
+        plot_trajectories_2(Xts, t)
 
     result = []
     for i in tqdm(range(iteration)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
         t, Xts = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
+        if plot: plot_trajectories_2(Xts, t)
         #plot_trajectories_2(Xts, t)
         T2,M2 = copy.deepcopy(t),copy.deepcopy(Xts)
         # Reverse the series
