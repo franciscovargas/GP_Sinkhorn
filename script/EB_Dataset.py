@@ -58,9 +58,9 @@ num_time_points_prior = N
 # random subsampling, should not affect interpretability much, ive tested it in all our experiments
 # works surprisingly well
 result = MLE_IPFP(
-    X_0,X_1,N=N,sigma=sigma, iteration=10, sparse=False, 
+    X_0,X_1,N=N,sigma=sigma, iteration=20, sparse=False,
     num_data_points=data_inducing_points, num_time_points=time_inducing_points, prior_X_0=prior_X_0,
-    num_data_points_prior=num_data_points_prior, num_time_points_prior=num_time_points_prior
+    num_data_points_prior=num_data_points_prior, num_time_points_prior=num_time_points_prior,decay_sigma=0.85
 )
 
 # Plot trajectories

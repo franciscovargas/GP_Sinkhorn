@@ -9,6 +9,7 @@ import pyro.contrib.gp as gp
 from tqdm import tqdm
 import gc
 import copy
+import os
 
 
 def fit_drift(
@@ -57,7 +58,7 @@ def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
-        kernel=gp.kernels.RBF, observation_noise=1.0
+        kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -90,10 +91,12 @@ def MLE_IPFP(
                                        parameter.
     :param num_time_points_prior[int]: number of time step inducing points to use for the prior backwards
                                        drift estimation. Same comments as with `num_data_points_prior`.
+    :param decay_sigma[float]: Decay the noise sigma at each iteration.
     
     :return: At the moment returning the fitted forwards and backwards timeseries for plotting. However
              should also return the forwards and backwards drifts. 
     """
+    log_dir = os.environ(["LOG_DIR"])
     if prior_drift is None:
         prior_drift = lambda x: torch.tensor([0]*(x.shape[1]-1)).reshape((1,-1)).repeat(x.shape[0],1)
         
@@ -151,12 +154,14 @@ def MLE_IPFP(
             plot_trajectories_2(M2, T2)
             plot_trajectories_2(M, T, color='r')
         result.append([T, M, T2, M2])
+        sigma *= decay_sigma
         gc.collect() # fixes odd memory leak
-        pickle.dump(result,open("./../assets/result_dump/result_"+str(i)+".pkl","wb"))
+        pickle.dump(result,open(LOG_DIR+ "result_"+str(i)+".pkl","wb"))
+
 
     T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N)
     result.append([T, M, T2, M2])
-    pickle.dump(result, open("./../assets/result_dump/result_final.pkl", "wb"))
+    pickle.dump(result, open(LOG_DIR+"result_final.pkl", "wb"))
 
     return result
