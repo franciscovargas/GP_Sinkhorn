@@ -135,3 +135,4 @@ data/preprocessed_ebt_counts.pkl
 data/preprocessed_ebt_counts_labels.pkl
 assets/result_dump/*.pkl
 data/result_final.pkl
+*result*.pkl
