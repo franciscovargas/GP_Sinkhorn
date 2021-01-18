@@ -118,7 +118,7 @@ def MLE_IPFP(
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
         t, Xts = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
-        if plot: plot_trajectories_2(Xts, t)
+        
         #plot_trajectories_2(Xts, t)
         T2,M2 = copy.deepcopy(t),copy.deepcopy(Xts)
         # Reverse the series
@@ -138,7 +138,9 @@ def MLE_IPFP(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points
         )
-
+        if plot:
+            plot_trajectories_2(M2, T2)
+            plot_trajectories_2(M, T, color='r')
         result.append([T, M, T2, M2])
         gc.collect() # fixes odd memory leak
         pickle.dump(result,open("./../assets/result_dump/result_"+str(i)+".pkl","wb"))
