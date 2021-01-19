@@ -161,12 +161,12 @@ def MLE_IPFP(
             print(i%div, i, div)
             sigma *= decay_sigma
         gc.collect() # fixes odd memory leak
-        pickle.dump(result,open(log_dir+ "result_"+str(i)+".pkl","wb"))
+        pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))
 
 
     T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N)
     result.append([T, M, T2, M2])
-    pickle.dump(result, open(log_dir+"result_final.pkl", "wb"))
+    pickle.dump(result, open(log_dir+"/result_final.pkl", "wb"))
     print(sigma)
     return result
