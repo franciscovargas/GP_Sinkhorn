@@ -163,7 +163,6 @@ def MLE_IPFP(
             plot_trajectories_2(M, T, color='r')
         result.append([T, M, T2, M2])
         if i < iteration and i % div == 0:
-            print(i%div, i, div)
             sigma *= decay_sigma
         gc.collect() # fixes odd memory leak
         if log:
