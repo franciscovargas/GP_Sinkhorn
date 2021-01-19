@@ -97,7 +97,12 @@ def MLE_IPFP(
     :return: At the moment returning the fitted forwards and backwards timeseries for plotting. However
              should also return the forwards and backwards drifts. 
     """
-    log_dir = os.environ["DIR_LOG"]
+    try:
+        log_dir = os.environ["DIR_LOG"]
+        log = True
+    except:
+        print("Log dir not found")
+        log = False
     if prior_drift is None:
         prior_drift = lambda x: torch.tensor([0]*(x.shape[1]-1)).reshape((1,-1)).repeat(x.shape[0],1)
         
@@ -161,12 +166,13 @@ def MLE_IPFP(
             print(i%div, i, div)
             sigma *= decay_sigma
         gc.collect() # fixes odd memory leak
-        pickle.dump(result,open(log_dir+ "result_"+str(i)+".pkl","wb"))
+        if log:
+                pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))
 
 
     T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N)
     result.append([T, M, T2, M2])
-    pickle.dump(result, open(log_dir+"result_final.pkl", "wb"))
-    print(sigma)
+    if log:
+        pickle.dump(result, open(log_dir + "/result_final.pkl", "wb"))
     return result
