@@ -28,7 +28,7 @@ parser.add_argument("--log-dir",type=str,default="./../assets/result_dump")
 args = vars(parser.parse_args())
 
 #Save config file
-f = open(args["log_dir"]+"config.txt","w")
+f = open(args["log_dir"]+"/config.txt","w")
 f.write( str(args) )
 f.close()
 
@@ -41,7 +41,7 @@ scprep.plot.scatter2d(ds.get_data(), c='Gray', alpha=0.1, ax=ax)
 
 frame_0_start, frame_0_end = np.where(ds.labels == args["start_frame"])[0][0], np.where(ds.labels == args["start_frame"])[0][-1]
 frame_4_start, frame_4_end = np.where(ds.labels == args["end_frame"])[0][0], np.where(ds.labels == args["end_frame"])[0][-1]
-
+print("Args ",str(args))
 
 X_0_f = ds.get_data()[frame_0_start:frame_0_end]
 X_1_f = ds.get_data()[frame_4_start:frame_4_end]
