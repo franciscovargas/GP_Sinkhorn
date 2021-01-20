@@ -144,6 +144,9 @@ def MLE_IPFP(
         T2,M2 = copy.deepcopy(t),copy.deepcopy(Xts)
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
+        del drift_forward
+        gc.collect()
+
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
@@ -157,6 +160,8 @@ def MLE_IPFP(
 
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
+        del drift_backward
+        gc.collect()
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
