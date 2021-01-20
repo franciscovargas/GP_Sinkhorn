@@ -62,7 +62,7 @@ def MLE_IPFP(
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5,
-        div =1, gp_mean_prior_flag=False
+        div =1, gp_mean_prior_flag=False,log_dir=None,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -96,16 +96,12 @@ def MLE_IPFP(
     :param num_time_points_prior[int]: number of time step inducing points to use for the prior backwards
                                        drift estimation. Same comments as with `num_data_points_prior`.
     :param decay_sigma[float]: Decay the noise sigma at each iteration.
+    :param log_dir[str]: Directory to log the result. If None don't log.
     
     :return: At the moment returning the fitted forwards and backwards timeseries for plotting. However
              should also return the forwards and backwards drifts. 
     """
-    try:
-        log_dir = os.environ["DIR_LOG"]
-        log = True
-    except:
-        print("Log dir not found")
-        log = False
+
     if prior_drift is None:
         prior_drift = lambda x: torch.tensor([0]*(x.shape[1]-1)).reshape((1,-1)).repeat(x.shape[0],1)
         
@@ -183,13 +179,13 @@ def MLE_IPFP(
         if i < iteration and i % div == 0:
             sigma *= decay_sigma
         gc.collect() # fixes odd memory leak
-        if log:
+        if log_dir != None :
             pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))
 
 
     T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N)
     result.append([T, M, T2, M2])
-    if log:
+    if log_dir != None:
         pickle.dump(result, open(log_dir + "/result_final.pkl", "wb"))
     return result
