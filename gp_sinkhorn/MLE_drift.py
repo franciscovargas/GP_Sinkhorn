@@ -15,7 +15,7 @@ import os
 def fit_drift(
     Xts,N,dt, sparse=False,
     num_data_points=10, num_time_points=50,
-    kernel=gp.kernels.RBF, noise=1.0
+    kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None,
     ):
     """
     This function transforms a set of timeseries into an autoregression problem and
@@ -44,13 +44,16 @@ def fit_drift(
     if sparse:
         gp_drift_model = MultitaskGPModelSparse(
             Xs, Ys, num_data_points=num_data_points, num_time_points=num_time_points,
-            kern=kernel, noise=noise
+            kern=kernel, noise=noise, gp_mean_function=gp_mean_function
         )
         gp_drift_model.fit_gp()
     else:
-        gp_drift_model = MultitaskGPModel(Xs, Ys, kern=kernel, noise=noise)  # Setup the GP
+        gp_drift_model = MultitaskGPModel(Xs, Ys, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
-    gp_ou_drift = lambda x: gp_drift_model.predict(x)  # Extract mean drift
+    
+        def gp_ou_drift(x,debug=False):
+            return gp_drift_model.predict(x, debug=debug)
+#     gp_ou_drift = lambda x,debug: gp_drift_model.predict(x, debug=debug)  # Extract mean drift
     return gp_ou_drift
 
 
@@ -59,7 +62,7 @@ def MLE_IPFP(
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5,
-        div =1
+        div =1, gp_mean_prior_flag=False
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -124,7 +127,7 @@ def MLE_IPFP(
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
     drift_backward = fit_drift(
         Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points_prior,
-        num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise
+        num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise,
     )
     
     if plot:
@@ -132,6 +135,8 @@ def MLE_IPFP(
         plot_trajectories_2(Xts, t)
 
     result = []
+    
+    prior_drift_backward = copy.deepcopy(drift_backward)
     
     iterations = iteration + refinement_iterations if sigma != 1.0 else iteration
     for i in tqdm(range(iterations)):
@@ -145,10 +150,12 @@ def MLE_IPFP(
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
-            num_time_points=num_time_points, kernel=kernel, noise=observation_noise
+            num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
+            gp_mean_function=(prior_drift if gp_mean_prior_flag else None)
         )
         # Estimate backward drift
         # Start from X_0 and roll until t=1 using drift_forward
+        # HERE: HERE is where the GP prior kicks in and helps the most
         t, Xts = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
         T,M = copy.deepcopy(t),copy.deepcopy(Xts)
 
@@ -156,7 +163,18 @@ def MLE_IPFP(
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
-            num_time_points=num_time_points, kernel=kernel, noise=observation_noise
+            num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
+            gp_mean_function= None # One wouuld think this should (worth rethinking this)
+                                   # be prior drift backwards here
+                                   # but that doesnt work as well,
+                                   # Its kinda clear (intuitively)
+                                   # that prior_drift backwards
+                                   # as a fallback is not going to help
+                                   # this prior, instead the prior of this GP
+                                   # should be inherting the backwards drift
+                                   # of the GP at iteration 1 sadly we dont 
+                                   # have such an estimate thus this should be None
+            
         )
         if plot:
             plot_trajectories_2(M2, T2)
@@ -166,7 +184,7 @@ def MLE_IPFP(
             sigma *= decay_sigma
         gc.collect() # fixes odd memory leak
         if log:
-                pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))
+            pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))
 
 
     T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)

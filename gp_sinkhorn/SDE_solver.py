@@ -43,6 +43,7 @@ def solve_sde_RK(b_drift=None, sigma=None, X0=None, dt=1.0, N=100, t0=0.0,
     for n in range(N - 1):
         t = ti[n + 1]  # 1)
         b, DW_n = b_drift(Y[:, n, :]), DWs[:, n, :]
+        
         newY = (
                 Y[:, n, :-1] + b * dt + sigma * DW_n
         )

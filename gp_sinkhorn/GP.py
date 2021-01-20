@@ -15,7 +15,11 @@ import time
 class GPRegression_fast(gp.models.GPRegression):
 
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6,precompute_inv=None):
-        super().__init__(X, y, kernel, mean_function=mean_function, jitter=jitter,noise=noise)
+        self.mean_flag = mean_function
+        if mean_function is not None:
+            super().__init__(X, y, kernel, mean_function=mean_function, jitter=jitter,noise=noise)
+        else:
+            super().__init__(X, y, kernel, jitter=jitter,noise=noise)
         if precompute_inv == None:
             N = self.X.size(0)
             Kff = self.kernel(self.X).contiguous()
@@ -24,7 +28,7 @@ class GPRegression_fast(gp.models.GPRegression):
         else:
             self.Kff_inv = precompute_inv
 
-    def forward(self, Xnew, full_cov=False, noiseless=True,reuse_kernel=None):
+    def forward(self, Xnew, full_cov=False, noiseless=True,reuse_kernel=None, debug=False):
         r"""
         Computes the mean and covariance matrix (or variance) of Gaussian Process
         posterior on a test input data :math:`X_{new}`:
@@ -47,21 +51,32 @@ class GPRegression_fast(gp.models.GPRegression):
         self._check_Xnew_shape(Xnew)
         self.set_mode("guide")
         N = self.X.size(0)
+        
         y_residual = self.y - self.mean_function(self.X)
+#         print("y_residual", y_residual.shape, self.X.shape)
+        if debug: #self.mean_flag is not None:
+            import pdb; pdb.set_trace()
 
         if reuse_kernel == None:
             Kfs = self.kernel(self.X, Xnew)
             reuse_kernel = torch.mm(Kfs.T,self.Kff_inv)
 
         loc = torch.mm(reuse_kernel,y_residual.reshape((-1,1)))
-
-        return loc + self.mean_function(Xnew),reuse_kernel
+        
+#         outer = loc + self.mean_function(Xnew)
+#         if self.mean_flag is not None:
+#             print("loc.shape", loc.shape, self.mean_function(Xnew).shape, outer.shape)
+        mfnew = self.mean_function(Xnew) if self.mean_flag is None else self.mean_function(Xnew).reshape(-1,1)
+        return loc + mfnew ,reuse_kernel
 
 
 class SparseGPRegression_fast(gp.models.SparseGPRegression):
 
     def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, jitter=1e-6,precompute_inv=None):
-        super().__init__(X, y, kernel, Xu, mean_function=mean_function, jitter=jitter,noise=noise)
+        if mean_function is not None:
+            super().__init__(X, y, kernel, Xu, mean_function=mean_function, jitter=jitter,noise=noise)
+        else:
+            super().__init__(X, y, kernel, Xu, jitter=jitter,noise=noise)
         if precompute_inv == None:
             N = self.X.size(0)
             M = self.Xu.size(0)
@@ -100,11 +115,12 @@ class SparseGPRegression_fast(gp.models.SparseGPRegression):
         :rtype: tuple(torch.Tensor, torch.Tensor)
         """
         self._check_Xnew_shape(Xnew)
-
+    
         N = self.X.size(0)
         M = self.Xu.size(0)
         
         # get y_residual and convert it into 2D tensor for packing
+        
         y_residual = self.y - self.mean_function(self.X)
         y_2D = y_residual.reshape(-1, N).t()
         W_Dinv_y = self.W_Dinv.matmul(y_2D)
@@ -137,7 +153,7 @@ class MultitaskGPModel():
     Fits a seperate GP per dimension for the SDE drift estimation
     """
 
-    def __init__(self, X, y, noise=.1, dt=1, kern=gp.kernels.RBF):
+    def __init__(self, X, y, noise=.1, dt=1, kern=gp.kernels.RBF, gp_mean_function=None):
         """
         For our scenario d' = d+1 
         
@@ -154,17 +170,21 @@ class MultitaskGPModel():
         with torch.no_grad():
             kernel = kern(input_dim=X.shape[1]) # changed from Matern32
             for i in range(y.shape[1]):
+                gp_mean_function_i = (lambda xx: gp_mean_function(xx)[:,i].reshape(-1)) if gp_mean_function else None
+#                 if gp_mean_function_i is not None:
+#                     import pdb; pdb.set_trace()
                 if i == 0:
                     gpr = GPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt))
+                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)), mean_function=gp_mean_function_i
                     )
                 else:
                     gpr = GPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)),precompute_inv=self.gpr_list[0].Kff_inv
+                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)),precompute_inv=self.gpr_list[0].Kff_inv,
+                        mean_function=gp_mean_function_i
                     )
                 self.gpr_list.append(gpr)
 
-    def predict(self, X):
+    def predict(self, X, debug=False):
         """
         Evaluates the drift on the inputs:
         
@@ -178,7 +198,7 @@ class MultitaskGPModel():
             reuse_kernel = None
             for gpr in self.gpr_list:
                 # your code here
-                mean,reuse_kernel = gpr(X, full_cov=True, noiseless=True,reuse_kernel=reuse_kernel)
+                mean,reuse_kernel = gpr(X, full_cov=True, noiseless=True,reuse_kernel=reuse_kernel, debug=debug)
                 mean_list.append(mean.double().reshape((-1, 1)))
             return torch.cat(mean_list, dim=1)
     
@@ -243,7 +263,7 @@ class MultitaskGPModelSparse(MultitaskGPModel):
         
     def __init__(self, X, y, noise=.1, dt=1,
                  num_data_points=10, num_time_points=50,
-                 nystrom_only=True, kern=gp.kernels.RBF):
+                 nystrom_only=True, kern=gp.kernels.RBF, gp_mean_function=None):
         """
         For our scenario d' = d+1 
         
@@ -267,10 +287,11 @@ class MultitaskGPModelSparse(MultitaskGPModel):
 
             kernel = kern(input_dim=X.shape[1]) # changed from Matern32
             for i in range(y.shape[1]):
-                
+                gp_mean_function_i = (lambda X: gp_mean_function(X)[:,i].reshape(-1,1)) if gp_mean_function else None
                 if i == 0:
                     gpr = SparseGPRegression_fast(
-                    X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)), Xu=Xu
+                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)), Xu=Xu,
+                        mean_function=gp_mean_function_i
                     )
                 else:
                     gpr = SparseGPRegression_fast(
@@ -280,7 +301,8 @@ class MultitaskGPModelSparse(MultitaskGPModel):
                             self.gpr_list[0].Luu,
                             self.gpr_list[0].L,
                             self.gpr_list[0].W_Dinv
-                        )
+                        ),
+                        mean_function=gp_mean_function_i
                     )
                 self.gpr_list.append(gpr)
     
