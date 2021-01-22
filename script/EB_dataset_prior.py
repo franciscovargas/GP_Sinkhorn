@@ -5,13 +5,14 @@ import torch
 
 def get_prior_EB():
     def pred_grad(clf,x,return_pred=False):
-        x = x[:5].requires_grad_(True)
-        pred = clf.score_samples(x).backward()
-        if return_pred:
-            return x.grad.numpy(),pred
-        else:
-            return x.grad.numpy()
-
+        with torch.set_grad_enabled(True):
+            x_new = x[:5].requires_grad_(True)
+            pred = clf.score_samples(x_new)
+            pred.backward()
+            if return_pred:
+                return x_new.grad.detach().numpy(),pred
+            else:
+                return x_new.grad.detach().numpy()
     ds = EBData('pcs', max_dim=5)
     data = torch.tensor(ds.get_data())
     clf = GaussianMixture(15,5)

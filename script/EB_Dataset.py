@@ -26,6 +26,7 @@ parser.add_argument("--end-frame", type=int, default=4)
 parser.add_argument("--log-dir",type=str,default="./../assets/result_dump")
 parser.add_argument("--gp-prior",type=int,default=0)
 
+
 #Parse arguments
 args = vars(parser.parse_args())
 
@@ -49,15 +50,15 @@ X_0_f = ds.get_data()[frame_0_start:frame_0_end]
 X_1_f = ds.get_data()[frame_4_start:frame_4_end]
 
 # Subsample terminals
-perm_0 = np.random.permutation(np.arange(len(X_0_f)))
-perm_1 = np.random.permutation(np.arange(len(X_1_f)))
-k = 20
+#perm_0 = np.random.permutation(np.arange(len(X_0_f)))
+#perm_1 = np.random.permutation(np.arange(len(X_1_f)))
+#k = 20
 
-X_0 = torch.tensor(X_0_f[perm_0][:k])
-X_1 = torch.tensor(X_1_f[perm_1][:k])
+#X_0 = torch.tensor(X_0_f[perm_0][:k])
+#X_1 = torch.tensor(X_1_f[perm_1][:k])
 
-#X_0 = torch.tensor(X_0_f)
-#X_1 = torch.tensor(X_1_f)
+X_0 = torch.tensor(X_0_f)
+X_1 = torch.tensor(X_1_f)
 
 
 # SDE Solver config

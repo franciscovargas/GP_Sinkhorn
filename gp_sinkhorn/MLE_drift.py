@@ -126,7 +126,7 @@ def MLE_IPFP(
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
     drift_backward = fit_drift(
         Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points_prior,
-        num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise,
+        num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise
     )
     
     if plot:

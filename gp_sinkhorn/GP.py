@@ -15,18 +15,20 @@ import time
 class GPRegression_fast(gp.models.GPRegression):
 
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6,precompute_inv=None):
-        self.mean_flag = mean_function
-        if mean_function is not None:
-            super().__init__(X, y, kernel, mean_function=mean_function, jitter=jitter,noise=noise)
-        else:
-            super().__init__(X, y, kernel, jitter=jitter,noise=noise)
-        if precompute_inv == None:
-            N = self.X.size(0)
-            Kff = self.kernel(self.X).contiguous()
-            Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
-            self.Kff_inv = torch.inverse(Kff)
-        else:
-            self.Kff_inv = precompute_inv
+        with torch.no_grad():
+
+            self.mean_flag = mean_function
+            if mean_function is not None:
+                super().__init__(X, y, kernel, mean_function=mean_function, jitter=jitter,noise=noise)
+            else:
+                super().__init__(X, y, kernel, jitter=jitter,noise=noise)
+            if precompute_inv == None:
+                N = self.X.size(0)
+                Kff = self.kernel(self.X).contiguous()
+                Kff.view(-1)[::N + 1] += self.jitter + self.noise  # add noise to the diagonal
+                self.Kff_inv = torch.inverse(Kff)
+            else:
+                self.Kff_inv = precompute_inv
 
     def forward(self, Xnew, full_cov=False, noiseless=True,reuse_kernel=None, debug=False):
         r"""
@@ -50,24 +52,26 @@ class GPRegression_fast(gp.models.GPRegression):
         """
         self._check_Xnew_shape(Xnew)
         self.set_mode("guide")
-        N = self.X.size(0)
-        
-        y_residual = self.y - self.mean_function(self.X)
-#         print("y_residual", y_residual.shape, self.X.shape)
-        if debug: #self.mean_flag is not None:
-            import pdb; pdb.set_trace()
+        with torch.no_grad():
 
-        if reuse_kernel == None:
-            Kfs = self.kernel(self.X, Xnew)
-            reuse_kernel = torch.mm(Kfs.T,self.Kff_inv)
+            N = self.X.size(0)
 
-        loc = torch.mm(reuse_kernel,y_residual.reshape((-1,1)))
-        
-#         outer = loc + self.mean_function(Xnew)
-#         if self.mean_flag is not None:
-#             print("loc.shape", loc.shape, self.mean_function(Xnew).shape, outer.shape)
-        mfnew = self.mean_function(Xnew) if self.mean_flag is None else self.mean_function(Xnew).reshape(-1,1)
-        return loc + mfnew ,reuse_kernel
+            y_residual = self.y - self.mean_function(self.X)
+
+            #         print("y_residual", y_residual.shape, self.X.shape)
+            if debug: #self.mean_flag is not None:
+                import pdb; pdb.set_trace()
+            if reuse_kernel == None:
+                Kfs = self.kernel(self.X, Xnew)
+                reuse_kernel = torch.mm(Kfs.T,self.Kff_inv)
+
+            loc = torch.mm(reuse_kernel,y_residual.reshape((-1,1)))
+
+    #         outer = loc + self.mean_function(Xnew)
+    #         if self.mean_flag is not None:
+    #             print("loc.shape", loc.shape, self.mean_function(Xnew).shape, outer.shape)
+            mfnew = self.mean_function(Xnew) if self.mean_flag is None else self.mean_function(Xnew).reshape(-1,1)
+        return (loc + mfnew),reuse_kernel
 
 
 class SparseGPRegression_fast(gp.models.SparseGPRegression):
@@ -167,22 +171,21 @@ class MultitaskGPModel():
         """
         self.dim = y.shape[1]
         self.gpr_list = []
-        with torch.no_grad():
-            kernel = kern(input_dim=X.shape[1]) # changed from Matern32
-            for i in range(y.shape[1]):
-                gp_mean_function_i = (lambda xx: gp_mean_function(xx)[:,i].reshape(-1)) if gp_mean_function else None
+        kernel = kern(input_dim=X.shape[1]) # changed from Matern32
+        for i in range(y.shape[1]):
+            gp_mean_function_i = (lambda xx: gp_mean_function(xx)[:,i].reshape(-1)) if gp_mean_function else None
 #                 if gp_mean_function_i is not None:
 #                     import pdb; pdb.set_trace()
-                if i == 0:
-                    gpr = GPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / (dt)), mean_function=gp_mean_function_i
-                    )
-                else:
-                    gpr = GPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / (dt)),precompute_inv=self.gpr_list[0].Kff_inv,
-                        mean_function=gp_mean_function_i
-                    )
-                self.gpr_list.append(gpr)
+            if i == 0:
+                gpr = GPRegression_fast(
+                    X, y[:, i], kernel, noise=torch.tensor(noise / (dt)), mean_function=gp_mean_function_i
+                )
+            else:
+                gpr = GPRegression_fast(
+                    X, y[:, i], kernel, noise=torch.tensor(noise / (dt)),precompute_inv=self.gpr_list[0].Kff_inv,
+                    mean_function=gp_mean_function_i
+                )
+            self.gpr_list.append(gpr)
 
     def predict(self, X, debug=False):
         """
@@ -193,20 +196,20 @@ class MultitaskGPModel():
         :param X[nxd' ndarray]: state + time vector inputs to evaluate
                                 GPDrift on
         """
-        with torch.no_grad():
-            mean_list = []
-            reuse_kernel = None
-            for gpr in self.gpr_list:
-                # your code here
-                mean,reuse_kernel = gpr(X, full_cov=True, noiseless=True,reuse_kernel=reuse_kernel, debug=debug)
-                mean_list.append(mean.double().reshape((-1, 1)))
-            return torch.cat(mean_list, dim=1)
+        mean_list = []
+        reuse_kernel = None
+        for gpr in self.gpr_list:
+            # your code here
+            mean,reuse_kernel = gpr(X, full_cov=True, noiseless=True,reuse_kernel=reuse_kernel, debug=debug)
+            mean_list.append(mean.double().reshape((-1, 1)))
+        return torch.cat(mean_list, dim=1)
     
     def fit_gp(self, num_steps=30):
         """
         Fits GP hyperparameters. Only to be potentially used 
         outside of the IPFP loop if used at all
         """
+        raise("Need to fix grads before running this")
         for gpr in self.gpr_list:
             optimizer = torch.optim.Adam(gpr.parameters(), lr=0.005)
             loss_fn = pyro.infer.Trace_ELBO().differentiable_loss
