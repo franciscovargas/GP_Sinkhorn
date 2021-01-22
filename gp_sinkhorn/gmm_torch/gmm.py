@@ -111,9 +111,9 @@ class GaussianMixture(torch.nn.Module):
 
         i = 0
         j = np.inf
-
+        print("Fitting the GMM module")
         while (i <= n_iter) and (j >= delta):
-            print("Iter ",i ,"/",n_iter)
+
             log_likelihood_old = self.log_likelihood
             mu_old = self.mu
             var_old = self.var

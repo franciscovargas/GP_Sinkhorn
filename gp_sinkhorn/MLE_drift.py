@@ -10,7 +10,7 @@ from tqdm import tqdm
 import gc
 import copy
 import os
-
+import time
 
 def fit_drift(
     Xts,N,dt, sparse=False,
@@ -62,7 +62,7 @@ def MLE_IPFP(
         sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5,
-        div =1, gp_mean_prior_flag=False,log_dir=None,
+        div =1, gp_mean_prior_flag=False,log_dir=None,verbose=0,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -141,7 +141,12 @@ def MLE_IPFP(
     for i in tqdm(range(iterations)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
+        if verbose:
+            print("Solve drift forward ")
+            t0 = time.time()
         t, Xts = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
+        if verbose:
+            print("Forward drift solved in ",time.time()-t0)
         del drift_forward
         gc.collect()
         #plot_trajectories_2(Xts, t)
@@ -149,12 +154,17 @@ def MLE_IPFP(
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
 
-
+        if verbose:
+            print("Fit drift")
+            t0 = time.time()
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None)
         )
+        if verbose:
+            print("Fitting drift solved in ",time.time()-t0)
+
         # Estimate backward drift
         # Start from X_0 and roll until t=1 using drift_forward
         # HERE: HERE is where the GP prior kicks in and helps the most
