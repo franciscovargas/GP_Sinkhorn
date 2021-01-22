@@ -21,9 +21,8 @@ print(f.read())
 f.close()
 
 ds = EBData('pcs', max_dim=5)
-frame_0_start, frame_0_end = np.where(ds.labels == 1)[0][0], np.where(ds.labels == 1)[0][-1]
-frame_4_start, frame_4_end = np.where(ds.labels == 3)[0][0], np.where(ds.labels == 3)[0][-1]
-
+frame_0_start, frame_0_end = np.where(ds.labels == 0)[0][0], np.where(ds.labels == 0)[0][-1]
+frame_4_start, frame_4_end = np.where(ds.labels == 4)[0][0], np.where(ds.labels == 4)[0][-1]
 
 frame_2_start, frame_2_end = np.where(ds.labels == 2)[0][0], np.where(ds.labels == 2)[0][-1]
 
