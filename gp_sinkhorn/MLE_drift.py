@@ -142,13 +142,13 @@ def MLE_IPFP(
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
         t, Xts = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1,dt=dt, N=N)
-        
+        del drift_forward
+        gc.collect()
         #plot_trajectories_2(Xts, t)
         T2,M2 = copy.deepcopy(t),copy.deepcopy(Xts)
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
-        del drift_forward
-        gc.collect()
+
 
         drift_forward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
@@ -159,12 +159,13 @@ def MLE_IPFP(
         # Start from X_0 and roll until t=1 using drift_forward
         # HERE: HERE is where the GP prior kicks in and helps the most
         t, Xts = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0,dt=dt, N=N)
-        T,M = copy.deepcopy(t),copy.deepcopy(Xts)
-
-        # Reverse the series
-        Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
         del drift_backward
         gc.collect()
+
+        T,M = copy.deepcopy(t),copy.deepcopy(Xts)
+        # Reverse the series
+        Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
+
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
