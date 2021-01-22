@@ -74,6 +74,10 @@ data_inducing_points = 10
 time_inducing_points = N # No time reduction
 num_data_points_prior = 50
 num_time_points_prior = N
+if args["gp_prior"]:
+    drift_prior = get_prior_EB()
+else:
+    drift_prior = None
 
 # sparse enables the nystrom method which is just a low rank approximation of the kernel matrix using
 # random subsampling, should not affect interpretability much, ive tested it in all our experiments
@@ -82,7 +86,7 @@ result = MLE_IPFP(
     X_0,X_1,N=N,sigma=args["sigma"], iteration=args["iteration"], sparse=args["sparse"],
     num_data_points=data_inducing_points, num_time_points=time_inducing_points, prior_X_0=prior_X_0,
     num_data_points_prior=num_data_points_prior, num_time_points_prior=num_time_points_prior,decay_sigma=args["decay_sigma"],
-    log_dir=args["log_dir"],prior_drift=get_prior_EB(),gp_mean_prior_flag=args["gp_prior"],verbose=1,
+    log_dir=args["log_dir"],prior_drift=drift_prior,gp_mean_prior_flag=args["gp_prior"],verbose=1,
 )
 
 # Plot trajectories
