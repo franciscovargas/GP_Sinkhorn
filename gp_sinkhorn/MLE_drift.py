@@ -5,7 +5,7 @@ from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
 from gp_sinkhorn.utils import plot_trajectories_2
 import matplotlib.pyplot as plt
 import pyro.contrib.gp as gp
-
+import math
 from tqdm import tqdm
 import gc
 import copy
@@ -51,8 +51,8 @@ def fit_drift(
         gp_drift_model = MultitaskGPModel(Xs, Ys, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
     
-        def gp_ou_drift(x,debug=False):
-            return gp_drift_model.predict(x, debug=debug)
+    def gp_ou_drift(x,debug=False):
+        return gp_drift_model.predict(x, debug=debug)
 #     gp_ou_drift = lambda x,debug: gp_drift_model.predict(x, debug=debug)  # Extract mean drift
     return gp_ou_drift
 
@@ -113,6 +113,9 @@ def MLE_IPFP(
     drift_forward = None
         
     dt = 1.0 / N
+    
+    pow_ = int(math.floor(iteration / div))
+    observation_noise = sigma**2 if decay_sigma == 1.0 else (sigma * (decay_sigma**pow_))**2
     
     # Estimating the backward drift of brownian motion
     # Start in prior_X_0 and go forward. Then flip the series and learn a backward drift: drift_backward
@@ -184,6 +187,7 @@ def MLE_IPFP(
         result.append([T, M, T2, M2])
         if i < iteration and i % div == 0:
             sigma *= decay_sigma
+#             observation_noise = sigma**2
         gc.collect() # fixes odd memory leak
         if log_dir != None :
             pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))

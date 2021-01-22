@@ -175,11 +175,11 @@ class MultitaskGPModel():
 #                     import pdb; pdb.set_trace()
                 if i == 0:
                     gpr = GPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)), mean_function=gp_mean_function_i
+                        X, y[:, i], kernel, noise=torch.tensor(noise / (dt)), mean_function=gp_mean_function_i
                     )
                 else:
                     gpr = GPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)),precompute_inv=self.gpr_list[0].Kff_inv,
+                        X, y[:, i], kernel, noise=torch.tensor(noise / (dt)),precompute_inv=self.gpr_list[0].Kff_inv,
                         mean_function=gp_mean_function_i
                     )
                 self.gpr_list.append(gpr)
@@ -290,13 +290,13 @@ class MultitaskGPModelSparse(MultitaskGPModel):
                 gp_mean_function_i = (lambda X: gp_mean_function(X)[:,i].reshape(-1,1)) if gp_mean_function else None
                 if i == 0:
                     gpr = SparseGPRegression_fast(
-                        X, y[:, i], kernel, noise=torch.tensor(noise / math.sqrt(dt)), Xu=Xu,
+                        X, y[:, i], kernel, noise=torch.tensor(noise / (dt)), Xu=Xu,
                         mean_function=gp_mean_function_i
                     )
                 else:
                     gpr = SparseGPRegression_fast(
                         X, y[:, i], kernel,
-                        noise=torch.tensor(noise / math.sqrt(dt)),
+                        noise=torch.tensor(noise / (dt)),
                         Xu=Xu, precompute_inv=(
                             self.gpr_list[0].Luu,
                             self.gpr_list[0].L,
