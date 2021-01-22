@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import scprep
 import pandas as pd
 from TrajectoryNet.dataset import EBData
-
+from EB_dataset_prior import get_prior_EB
 from gp_sinkhorn.SDE_solver import solve_sde_RK
 from gp_sinkhorn.MLE_drift import *
 from gp_sinkhorn.utils import plot_trajectories_2
@@ -15,6 +15,7 @@ from IPython.display import HTML
 import math
 import argparse
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--sigma", type=float, default=1)
 parser.add_argument("--decay-sigma", type=float, default=1)
@@ -23,6 +24,7 @@ parser.add_argument("--sparse", type=int, default=0)
 parser.add_argument("--start-frame", type=int, default=0)
 parser.add_argument("--end-frame", type=int, default=4)
 parser.add_argument("--log-dir",type=str,default="./../assets/result_dump")
+parser.add_argument("--gp-prior",type=int,default=0)
 
 #Parse arguments
 args = vars(parser.parse_args())
@@ -79,7 +81,7 @@ result = MLE_IPFP(
     X_0,X_1,N=N,sigma=args["sigma"], iteration=args["iteration"], sparse=args["sparse"],
     num_data_points=data_inducing_points, num_time_points=time_inducing_points, prior_X_0=prior_X_0,
     num_data_points_prior=num_data_points_prior, num_time_points_prior=num_time_points_prior,decay_sigma=args["decay_sigma"],
-    log_dir=args["log_dir"]
+    log_dir=args["log_dir"],prior_drift=get_prior_EB(),gp_mean_prior_flag=args["gp_prior"]
 )
 
 # Plot trajectories

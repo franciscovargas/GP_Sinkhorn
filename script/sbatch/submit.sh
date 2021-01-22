@@ -17,4 +17,4 @@ counter=$((counter+1))
 echo $counter > sbatch/counter.txt
 
 
-python EB_Dataset.py --sigma 2.5 --decay-sigma 0.95 --iteration 20 --log-dir $dir_log --sparse 0 --start-frame 0 --end-frame 4
+python EB_Dataset.py --sigma 2.5 --decay-sigma 0.95 --iteration 20 --log-dir $dir_log --sparse 0 --gp-prior 1
