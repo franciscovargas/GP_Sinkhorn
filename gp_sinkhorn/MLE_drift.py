@@ -121,6 +121,8 @@ def MLE_IPFP(
     # Start in prior_X_0 and go forward. Then flip the series and learn a backward drift: drift_backward
 
     t, Xts = solve_sde_RK(b_drift=prior_drift, sigma=sigma, X0=prior_X_0, dt=dt, N=N)
+    
+    T_,M_ = copy.deepcopy(t),copy.deepcopy(Xts)
     if plot: plot_trajectories_2(Xts, t)
 
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
@@ -151,6 +153,8 @@ def MLE_IPFP(
         gc.collect()
         #plot_trajectories_2(Xts, t)
         T2,M2 = copy.deepcopy(t),copy.deepcopy(Xts)
+        
+        if i == 0: result.append([T_, M_, T2, M2])
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
 
@@ -179,7 +183,7 @@ def MLE_IPFP(
         drift_backward = fit_drift(
             Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
-            gp_mean_function=(prior_drift if gp_mean_prior_flag else None) 
+            gp_mean_function=(prior_drift if gp_mean_prior_flag else None)
                                    # One wouuld think this should (worth rethinking this)
                                    # be prior drift backwards here
                                    # but that doesnt work as well,

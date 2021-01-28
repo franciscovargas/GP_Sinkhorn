@@ -9,13 +9,14 @@ from pyro.infer import TraceMeanField_ELBO
 from pyro.infer.util import torch_backward, torch_item
 
 import time
-
-
+from pyro.contrib.gp.kernels import Exponential, Matern32, RBF, Brownian, Combination, Product, Sum, Kernel
+from copy import deepcopy
 
 class GPRegression_fast(gp.models.GPRegression):
 
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6,precompute_inv=None):
         with torch.no_grad():
+            if isinstance(kernel, Product): kernel = deepcopy(kernel)
 
             self.mean_flag = mean_function
             if mean_function is not None:
@@ -171,7 +172,12 @@ class MultitaskGPModel():
         """
         self.dim = y.shape[1]
         self.gpr_list = []
-        kernel = kern(input_dim=X.shape[1]) # changed from Matern32
+        if isinstance(kern, Kernel):
+            kernel = deepcopy(kern)
+#             import pdb; pdb.set_trace()
+        else:
+            kernel = kern(input_dim=X.shape[1]) # changed from Matern32
+            
         for i in range(y.shape[1]):
             gp_mean_function_i = (lambda xx: gp_mean_function(xx)[:,i].reshape(-1)) if gp_mean_function else None
 #                 if gp_mean_function_i is not None:
