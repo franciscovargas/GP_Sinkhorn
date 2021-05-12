@@ -176,7 +176,7 @@ class MultitaskGPModel():
             kernel = deepcopy(kern)
 #             import pdb; pdb.set_trace()
         else:
-            kernel = kern(input_dim=X.shape[1],variance=1.0/dt**2) # changed from Matern32
+            kernel = kern(input_dim=X.shape[1],variance=torch.tensor(1.0/dt**2)) # changed from Matern32
             
         for i in range(y.shape[1]):
             gp_mean_function_i = (lambda xx: gp_mean_function(xx)[:,i].reshape(-1)) if gp_mean_function else None
