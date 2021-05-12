@@ -100,18 +100,19 @@ class MultitaskGPModel():
 #             import pdb; pdb.set_trace()
         else:
             kernel = kern(input_dim=X.shape[1],variance=torch.tensor(1.0/dt**2)) # changed from Matern32
-            
+
+        noise = [noise]*y.shape[1] if type(noise) in [int, float] else noise  # if noise is multi dimensional select the right one
         for i in range(y.shape[1]):
             gp_mean_function_i = (lambda xx: gp_mean_function(xx)[:,i].reshape(-1)) if gp_mean_function else None
 #                 if gp_mean_function_i is not None:
 #                     import pdb; pdb.set_trace()
             if i == 0:
                 gpr = GPRegression_fast(
-                    X, y[:, i], kernel, noise=torch.tensor(noise / (dt)), mean_function=gp_mean_function_i
+                    X, y[:, i], kernel, noise=torch.tensor(noise[i] / (dt)), mean_function=gp_mean_function_i
                 )
             else:
                 gpr = GPRegression_fast(
-                    X, y[:, i], kernel, noise=torch.tensor(noise / (dt)),precompute_inv=self.gpr_list[0].Kff_inv,
+                    X, y[:, i], kernel, noise=torch.tensor(noise[i] / (dt)),precompute_inv=self.gpr_list[0].Kff_inv,
                     mean_function=gp_mean_function_i
                 )
             self.gpr_list.append(gpr)
