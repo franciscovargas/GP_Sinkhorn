@@ -43,12 +43,12 @@ def fit_drift(
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
     if sparse:
         gp_drift_model = MultitaskGPModelSparse(
-            Xs, Ys, num_data_points=num_data_points, num_time_points=num_time_points,
+            Xs, Ys, dt=dt, num_data_points=num_data_points, num_time_points=num_time_points,
             kern=kernel, noise=noise, gp_mean_function=gp_mean_function
         )
         gp_drift_model.fit_gp()
     else:
-        gp_drift_model = MultitaskGPModel(Xs, Ys, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
+        gp_drift_model = MultitaskGPModel(Xs, Ys, dt=dt, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
     
     def gp_ou_drift(x,debug=False):
