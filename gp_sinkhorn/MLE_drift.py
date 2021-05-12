@@ -1,7 +1,7 @@
 import pickle
 import torch
 from gp_sinkhorn.SDE_solver import solve_sde_RK
-from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
+from gp_sinkhorn.GP import MultitaskGPModel
 from gp_sinkhorn.utils import plot_trajectories_2
 import matplotlib.pyplot as plt
 import pyro.contrib.gp as gp
@@ -13,7 +13,7 @@ import os
 import time
 
 def fit_drift(
-    Xts,N,dt, sparse=False,
+    Xts,N,dt,
     num_data_points=10, num_time_points=50,
     kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None,
     ):
@@ -32,7 +32,6 @@ def fit_drift(
     :param N [int]: Number of samples in the time series
     :param dt [float]: time interval seperation between time points (sample rate)
     
-    :param sparse[bool]: enables the Nystrom method if True
     :param num_data_points[int]: Number of inducing samples(inducing points) from the boundary distributions
     :param num_time_points[int]: Number of inducing timesteps(inducing points) for the EM approximation
     
@@ -41,14 +40,8 @@ def fit_drift(
     X_0 = Xts[:, 0, 0].reshape(-1, 1)  # Extract starting point
     Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1]) / dt).reshape((-1, Xts.shape[2] - 1)) # Autoregressive targets y = (X_{t+e} - X_t)/dt
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
-    if sparse:
-        gp_drift_model = MultitaskGPModelSparse(
-            Xs, Ys, dt=dt, num_data_points=num_data_points, num_time_points=num_time_points,
-            kern=kernel, noise=noise, gp_mean_function=gp_mean_function
-        )
-        gp_drift_model.fit_gp()
-    else:
-        gp_drift_model = MultitaskGPModel(Xs, Ys, dt=dt, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
+
+    gp_drift_model = MultitaskGPModel(Xs, Ys, dt=dt, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
     
     def gp_ou_drift(x,debug=False):
@@ -59,7 +52,7 @@ def fit_drift(
 
 def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
-        sparse=False, num_data_points=10, num_time_points=50, prior_X_0=None,
+        num_data_points=10, num_time_points=50, prior_X_0=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5,
         div =1, gp_mean_prior_flag=False,log_dir=None,verbose=0,
@@ -78,9 +71,7 @@ def MLE_IPFP(
     :param iteration[int]: number of IPFP iterations
     
     :param prior_drift[nx(d+1) ndarray-> nxd ndarray]: drift function of the prior, defautls to Brownian
-    
-    :param sparse[bool]: This flag currently enables the Nystrom method. No variational opttimisation
-                         just random subsampling is used for the time being
+
     :param num_data_points[int]: Number of inducing samples(inducing points) from the boundary distributions
     :param num_time_points[int]: Number of inducing timesteps(inducing points) for the EM approximation
     
@@ -127,7 +118,7 @@ def MLE_IPFP(
 
     Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
     drift_backward = fit_drift(
-        Xts,N=N,dt=dt,sparse=sparse,num_data_points=num_data_points_prior,
+        Xts,N=N,dt=dt,num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise
     )
     
@@ -162,7 +153,7 @@ def MLE_IPFP(
             print("Fit drift")
             t0 = time.time()
         drift_forward = fit_drift(
-            Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
+            Xts,N=N,dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None)
         )
@@ -181,7 +172,7 @@ def MLE_IPFP(
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
 
         drift_backward = fit_drift(
-            Xts,N=N,dt=dt,sparse=sparse, num_data_points=num_data_points,
+            Xts,N=N,dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None)
                                    # One wouuld think this should (worth rethinking this)
