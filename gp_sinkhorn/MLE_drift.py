@@ -52,7 +52,7 @@ def fit_drift(
 
 def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
-        num_data_points=10, num_time_points=50, prior_X_0=None,
+        num_data_points=10, num_time_points=50, prior_X_0=None, prior_Xts=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5,
         div =1, gp_mean_prior_flag=False,log_dir=None,verbose=0,
@@ -77,7 +77,8 @@ def MLE_IPFP(
     
     :param prior_X_0[mxd array]: The marginal for the prior distribution \P . This is a free parameter
                                  which can be tweaked to encourage exploration and improve results.
-     
+
+    :param prior_Xts[nxTxd array] : Prior trajectory that can be used on the first iteration of IPML
     :param num_data_points_prior[int]: number of data inducing points to use for the prior backwards drift
                                        estimation prior to the IPFP loop and thus can afford to use more
                                        samples here than with `num_data_points`. Note starting off IPFP
@@ -110,13 +111,16 @@ def MLE_IPFP(
     
     # Estimating the backward drift of brownian motion
     # Start in prior_X_0 and go forward. Then flip the series and learn a backward drift: drift_backward
-
     t, Xts = solve_sde_RK(b_drift=prior_drift, sigma=sigma, X0=prior_X_0, dt=dt, N=N)
-    
+
     T_,M_ = copy.deepcopy(t),copy.deepcopy(Xts)
     if plot: plot_trajectories_2(Xts, t)
 
-    Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
+    if prior_Xts is not None:
+        Xts[:,:,:-1] = prior_Xts.flip(1) # Reverse the series
+    else:
+        Xts[:,:,:-1] = Xts[:,:,:-1].flip(1) # Reverse the series
+
     drift_backward = fit_drift(
         Xts,N=N,dt=dt,num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise
