@@ -14,8 +14,9 @@ import time
 
 def fit_drift(
     Xts,N,dt,
-    num_data_points=10, num_time_points=50,
+    num_data_points=10, num_time_points=50, 
     kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None,
+    langevin=False
     ):
     """
     This function transforms a set of timeseries into an autoregression problem and
@@ -40,6 +41,9 @@ def fit_drift(
     X_0 = Xts[:, 0, 0].reshape(-1, 1)  # Extract starting point
     Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1]) / dt).reshape((-1, Xts.shape[2] - 1)) # Autoregressive targets y = (X_{t+e} - X_t)/dt
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
+    
+    if langevin:
+        noise[noise==0] = 0.5
 
     gp_drift_model = MultitaskGPModel(Xs, Ys, dt=dt, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
@@ -55,7 +59,7 @@ def MLE_IPFP(
         num_data_points=10, num_time_points=50, prior_X_0=None, prior_Xts=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5,
-        div =1, gp_mean_prior_flag=False,log_dir=None,verbose=0,
+        div =1, gp_mean_prior_flag=False,log_dir=None,verbose=0,langevin=False
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -123,7 +127,8 @@ def MLE_IPFP(
 
     drift_backward = fit_drift(
         Xts,N=N,dt=dt,num_data_points=num_data_points_prior,
-        num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise
+        num_time_points=num_time_points_prior, kernel=kernel, noise=observation_noise, langevin=langevin
+
     )
     
     if plot:
@@ -134,7 +139,10 @@ def MLE_IPFP(
     
     prior_drift_backward = copy.deepcopy(drift_backward)
     
-    iterations = iteration + refinement_iterations if sigma != 1.0 else iteration
+    iterations = iteration
+    if not langevin:
+        iterations = iteration + refinement_iterations if sigma != 1.0 else iteration
+    
     for i in tqdm(range(iterations)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
@@ -159,7 +167,7 @@ def MLE_IPFP(
         drift_forward = fit_drift(
             Xts,N=N,dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
-            gp_mean_function=(prior_drift if gp_mean_prior_flag else None)
+            gp_mean_function=(prior_drift if gp_mean_prior_flag else None), langevin=langevin
         )
         if verbose:
             print("Fitting drift solved in ",time.time()-t0)
@@ -178,7 +186,7 @@ def MLE_IPFP(
         drift_backward = fit_drift(
             Xts,N=N,dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, noise=observation_noise,
-            gp_mean_function=(prior_drift if gp_mean_prior_flag else None)
+            gp_mean_function=(prior_drift if gp_mean_prior_flag else None), langevin=langevin
                                    # One wouuld think this should (worth rethinking this)
                                    # be prior drift backwards here
                                    # but that doesnt work as well,
