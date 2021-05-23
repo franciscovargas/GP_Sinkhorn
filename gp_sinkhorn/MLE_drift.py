@@ -43,7 +43,7 @@ def fit_drift(
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
     
     if langevin:
-        noise[noise==0] = 0.5
+        noise[noise==0.0] = 1.0
 
     gp_drift_model = MultitaskGPModel(Xs, Ys, dt=dt, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
@@ -211,8 +211,11 @@ def MLE_IPFP(
             pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))
 
 
-    T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)
+    
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N)
+    if iterations == 0 : return [(None, None, T2, M2)]
+    
+    T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N)
     result.append([T, M, T2, M2])
     if log_dir != None:
         pickle.dump(result, open(log_dir + "/result_final.pkl", "wb"))
