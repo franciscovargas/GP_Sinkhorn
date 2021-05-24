@@ -16,7 +16,6 @@ def fit_drift(
     Xts,N,dt,
     num_data_points=10, num_time_points=50, 
     kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None,
-    langevin=False
     ):
     """
     This function transforms a set of timeseries into an autoregression problem and
@@ -41,9 +40,7 @@ def fit_drift(
     X_0 = Xts[:, 0, 0].reshape(-1, 1)  # Extract starting point
     Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1]) / dt).reshape((-1, Xts.shape[2] - 1)) # Autoregressive targets y = (X_{t+e} - X_t)/dt
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
-    
-    if langevin:
-        noise[noise==0.0] = 1.0
+
 
     gp_drift_model = MultitaskGPModel(Xs, Ys, dt=dt, kern=kernel, noise=noise, gp_mean_function=gp_mean_function)  # Setup the GP
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
