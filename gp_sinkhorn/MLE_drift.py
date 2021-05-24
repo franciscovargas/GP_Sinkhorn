@@ -137,8 +137,7 @@ def MLE_IPFP(
     prior_drift_backward = copy.deepcopy(drift_backward)
     
     iterations = iteration
-    iterations = iteration + refinement_iterations if sigma != 1.0 else iteration
-    
+
     for i in tqdm(range(iterations)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
