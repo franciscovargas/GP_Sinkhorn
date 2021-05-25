@@ -99,7 +99,7 @@ class MultitaskGPModel():
             kernel = deepcopy(kern)
 #             import pdb; pdb.set_trace()
         else:
-            kernel = kern(input_dim=X.shape[1],variance=torch.tensor(1.0/dt**2)) # changed from Matern32
+            kernel = kern(input_dim=X.shape[1],variance=torch.tensor(1.0/dt)) # changed from Matern32
 
         noise = [noise]*y.shape[1] if type(noise) in [int, float] else noise  # if noise is multi dimensional select the right one
         for i in range(y.shape[1]):
