@@ -179,10 +179,10 @@ def MLE_IPFP(
         print("PLOT")
         axs = plot_pendulum(M2, T2,X_0, X_1, color="r", alpha=0.5)
     #     import pdb; pdb.set_trace()
-        plot_pendulum(M3[:,:,:], T3,prior_X_0, X_1, axs=axs,color="b", alpha=0.5)
+        plot_pendulum(M3[:,:,:], T3,X_0, X_1, axs=axs,color="b", alpha=0.5)
     #     plot_pendulum(M3, T3,axs=axs,color="b", alpha=0.5)
         plt.show()
-        plot_pendulum(M2, T2,prior_X_0, X_1, color="r", alpha=0.5)
+        plot_pendulum(M2, T2,X_0, X_1, color="r", alpha=0.5)
 
     result = []
     
