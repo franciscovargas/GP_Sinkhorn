@@ -2,7 +2,7 @@
 
 ![well](images/nicest_well.gif)
 
-Pytorch implementations and experiments for Neurips submission 2520 Solving Schr\odinger Bridges via Maximum Likelihood.
+Pytorch implementations and experiments for arxiv preprint Solving Schr\odinger Bridges via Maximum Likelihood.
 
 ## Instalation
 
