@@ -39,7 +39,7 @@ def train_nn(model, x_train, y_train):
         y_pred = model(x_train)
         # Compute Loss
         diff = y_train - y_pred
-        loss = torch.matmul(torch.transpose(diff, 0, 1), diff) / diff.shape[0]
+        loss = torch.matmul(torch.transpose(diff, 0, 1), diff).sum() / diff.shape[0]
 #         loss = loss_criteria(y_pred.squeeze(), y_train)
 
 #         print('Epoch {}: train loss: {}'.format(epoch, loss.item()))
