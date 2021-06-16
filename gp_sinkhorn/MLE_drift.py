@@ -2,7 +2,7 @@ import pickle
 import torch
 from gp_sinkhorn.SDE_solver import solve_sde_RK
 from gp_sinkhorn.GP import MultitaskGPModel
-from from gp_sinkhorn.NN import FeedForward, train_nn
+from gp_sinkhorn.NN import Feedforward, train_nn
 from gp_sinkhorn.utils import plot_trajectories_2
 import matplotlib.pyplot as plt
 import pyro.contrib.gp as gp
