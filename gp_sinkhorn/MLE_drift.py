@@ -2,6 +2,7 @@ import pickle
 import torch
 from gp_sinkhorn.SDE_solver import solve_sde_RK
 from gp_sinkhorn.GP import MultitaskGPModel
+from from gp_sinkhorn.NN import FeedForward, train_nn
 from gp_sinkhorn.utils import plot_trajectories_2
 import matplotlib.pyplot as plt
 import pyro.contrib.gp as gp
@@ -85,12 +86,57 @@ def fit_drift(
     return gp_ou_drift
 
 
+def fit_drift_nn(
+    Xts,N,dt,
+    num_data_points=10, num_time_points=50, 
+    kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, nn_model = Feedforward
+    ):
+    """
+    This function transforms a set of timeseries into an autoregression problem and
+    estimates the drift function using GPs following:
+    
+        - Papaspiliopoulos, Omiros, Yvo Pokern, Gareth O. Roberts, and Andrew M. Stuart.
+          "Nonparametric estimation of diffusions: a differential equations approach."
+          Biometrika 99, no. 3 (2012): 511-531.
+        - Ruttor, A., Batz, P., & Opper, M. (2013).
+          "Approximate Gaussian process inference for the drift function in stochastic differential equations."
+          Advances in Neural Information Processing Systems, 26, 2040-2048.
+    
+    :param Xts[MxNxD ndarray]: Array containing M timeseries of length N of dimension D
+    :param N [int]: Number of samples in the time series
+    :param dt [float]: time interval seperation between time points (sample rate)
+    
+    :param num_data_points[int]: Number of inducing samples(inducing points) from the boundary distributions
+    :param num_time_points[int]: Number of inducing timesteps(inducing points) for the EM approximation
+    
+    :return [nx(d+1) ndarray-> nxd ndarray]: returns fitted drift
+    """
+    X_0 = Xts[:, 0, 0].reshape(-1, 1)  # Extract starting point
+    Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1])  ).reshape((-1, Xts.shape[2] - 1)) # Autoregressive targets y = (X_{t+e} - X_t)/dt
+    Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) # Drop the last timepoint in each timeseries
+    
+    n,d = Xs.shape
+
+    nn_drift_model = nn_model(input_size=d).double()#Setup the NN
+    train_nn(nn_drift_model, Xs, Ys)
+
+#     nn_drift_model = LinearRegression()
+#     nn_drift_model.fit(Xs, Ys, method="lin")
+#     nn_drift_model.eval()
+    # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
+    
+    def gp_ou_drift(x,debug=False):
+        return nn_drift_model.predict(x, debug=debug)  /dt
+#     gp_ou_drift = lambda x,debug: gp_drift_model.predict(x, debug=debug)  # Extract mean drift
+    return gp_ou_drift
+
+
 def MLE_IPFP(
         X_0,X_1,N=10,sigma=1,iteration=10, prior_drift=None,
         num_data_points=10, num_time_points=50, prior_X_0=None, prior_Xts=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, refinement_iterations=5,
-        div =1, gp_mean_prior_flag=False,log_dir=None,verbose=0, langevin=False
+        div =1, gp_mean_prior_flag=False,log_dir=None,verbose=0, langevin=False, nn=False
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from \pi_0 and \pi_1 as
@@ -132,7 +178,9 @@ def MLE_IPFP(
     if prior_drift is None:
         prior_drift = lambda x: torch.tensor([0]*(x.shape[1]-1)).reshape((1,-1)).repeat(x.shape[0],1)
         
-    
+    if nn:
+        fit_drift = fit_drift_nn
+#         bbb
     # Setup for the priors backwards drift estimate
     prior_X_0 = X_0 if prior_X_0 is None else prior_X_0        
     num_data_points_prior = num_data_points if num_data_points_prior is None else num_data_points_prior
@@ -202,7 +250,7 @@ def MLE_IPFP(
         del drift_forward
         gc.collect()
         #plot_trajectories_2(Xts, t)
-        T2,M2 = copy.deepcopy(t),copy.deepcopy(Xts)
+        T2,M2 = copy.deepcopy(torch.tensor(t)),copy.deepcopy(torch.tensor(Xts))
         
         if i == 0: result.append([T_, M_, T2, M2])
         # Reverse the series
@@ -226,7 +274,7 @@ def MLE_IPFP(
         del drift_backward
         gc.collect()
 
-        T,M = copy.deepcopy(t),copy.deepcopy(Xts)
+        T,M = copy.deepcopy(torch.tensor(t.detach())),copy.deepcopy(torch.tensor(Xts.detach()))
         # Reverse the series
         Xts[:,:,:-1] = Xts[:,:,:-1].flip(1)
 
