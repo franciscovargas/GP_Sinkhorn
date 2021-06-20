@@ -24,8 +24,7 @@ class Feedforward(torch.nn.Module):
         return output
     
     def predict(self, x, debug=False):
-        return self.forward(x) 
-   
+        return self.forward(x)   
 
 
 def train_nn(model, x_train, y_train):
