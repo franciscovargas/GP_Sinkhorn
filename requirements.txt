@@ -1,0 +1,8 @@
+torch==1.7.1
+tqdm==4.55.1
+numpydoc==0.9.1
+seaborn==0.11.1
+celluloid==0.2.0
+pyro-api==0.1.2
+pyro-ppl==1.5.1
+jupyter
