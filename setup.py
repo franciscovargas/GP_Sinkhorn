@@ -8,7 +8,12 @@ except ImportError: # for pip <= 9.0.3
 
 here = path.abspath(path.dirname(__file__))
 install_reqs = parse_requirements(here + '/requirements.txt', session=False)
-reqs = [str(ir.req) for ir in install_reqs]
+
+# Catering for latest pip version
+try:
+    reqs = [str(ir.req) for ir in install_reqs]
+except:
+    reqs = [str(ir.requirement) for ir in install_reqs]
 
 # Get the long description from the relevant file
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
