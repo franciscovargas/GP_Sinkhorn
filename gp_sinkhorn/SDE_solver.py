@@ -3,7 +3,7 @@ import math
 from tqdm import tqdm
 
 def solve_sde_RK(b_drift=None, sigma=None, X0=None, dt=1.0, N=100, t0=0.0,
-                 theta=None, noise=False, forwards=True):
+                 theta=None, noise=False, forwards=True, device=None):
     """
             Euler Mayurama method
     Syntax:
@@ -30,20 +30,20 @@ def solve_sde_RK(b_drift=None, sigma=None, X0=None, dt=1.0, N=100, t0=0.0,
 
     n, d, *_ = X0.shape
 
-    T = torch.tensor(dt * N)
-    DWs = torch.empty((n, N - 1, d)).normal_(mean=0, std=1) * math.sqrt(dt)
+    T = torch.tensor(dt * N).to(device)
+    DWs = torch.empty((n, N - 1, d)).normal_(mean=0, std=1).to(device) * math.sqrt(dt)
 
-    Y, ti = torch.zeros((n, N, d + 1)).double(), torch.arange(N).double() * dt + t0
+    Y, ti = torch.zeros((n, N, d + 1)).double().to(device), torch.arange(N).double().to(device) * dt + t0
     t0rep = (
-        t0 * torch.ones((X0.shape[0], 1)).double() if forwards
-        else (T - t0) * torch.ones((X0.shape[0], 1)).double()
+        t0 * torch.ones((X0.shape[0], 1)).double().to(device) if forwards
+        else (T - t0) * torch.ones((X0.shape[0], 1)).double().to(device)
     )
-    Y = torch.cat((X0, t0rep), axis=1)[:, None, :]
+    Y = torch.cat((X0.to(device), t0rep), axis=1)[:, None, :]
     T = dt * N
     for n in range(N - 1):
         t = ti[n + 1]  # 1)
         b, DW_n = b_drift(Y[:, n, :]), DWs[:, n, :]
-        
+#         import pdb; pdb.set_trace()
         newY = (
                 Y[:, n, :-1] + b * dt + sigma * DW_n
         )

@@ -5,6 +5,7 @@ import GPy
 import pods
 from celluloid import Camera
 from IPython.display import HTML
+from gp_sinkhorn.SDE_solver import solve_sde_RK
 
 
 
@@ -212,4 +213,59 @@ def animate_skeleton(Y, data, notebook=True, standardise=False):
             standardise=standardise
         )
     return camera
+
+
+def plot_pendulum(Xts, t, P_0=None, P_1=None, axs=None, color="r", alpha=1.0):
+    if P_0 is not None and P_1 is not None:
+        X_0 = P_0[:,:6]
+        X_1 = P_1[:,:6]
+ 
+    _, _, dim_plus_one = Xts.shape
+    dim_times_two = dim_plus_one -1
+    dim = int(0.5 * dim_times_two)
+    if axs is None:
+        print("haa")
+        fig, axs = plt.subplots(dim, 2, figsize=(15,15))
+    if dim == 1:
+        axs = [axs]
+    
+    for dim_j in range(dim):
+        for i in range(Xts.shape[0]):
+            axs[dim_j, 0].plot(t, (  Xts[i,:,dim_j].flatten()) , color, alpha=alpha)
+
+        axs[dim_j, 0].set_title(f"$x_{dim_j}(t)$")
+
+        for i in range(Xts.shape[0]):
+            axs[dim_j, 1].plot(t, (  Xts[i,:, dim + dim_j].flatten()) , color, alpha=alpha)
+
+        axs[dim_j, 1].set_title(f"$v_{dim_j}(t)$")
+    
+        if P_0 is not None and P_1 is not None:
+            
+            axs[dim_j, 0].scatter([0]*X_0.shape[0],X_0[:,dim_j])
+            axs[dim_j, 0].scatter([1]*X_1.shape[0],X_1[:,dim_j])
+    return axs
+
+
+def auxiliary_plot_routine_init(Xts,t,prior_X_0,X_1,drift_backward, sigma, N,dt, device):
+    plot_pendulum(Xts, t,prior_X_0, X_1, color="g", alpha=0.5)
+    plt.show()
+    T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N, device=device)
+    T3, M3 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=Xts[:,0,:-1], dt=dt, N=N, device=device)
+
+    print("PLOT")
+    axs = plot_pendulum(M2, T2,X_0, X_1, color="r", alpha=0.5)
+    plot_pendulum(M3[:,:,:], T3,X_0, X_1, axs=axs,color="b", alpha=0.5)
+    plt.show()
+    plot_pendulum(M2, T2,X_0, X_1, color="r", alpha=0.5)
+
+
+def auxiliary_plot_routine_end(Xts,t,prior_X_0,X_1,drift_backward, sigma, N,dt, device):
+    T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, N=N, device=device)
+    T3, M3 = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N, device=device)
+
+    print("PLOT")
+    axs = plot_pendulum(M3, T3,X_0, X_1, color="r", alpha=0.5)
+
+    plt.show()
     

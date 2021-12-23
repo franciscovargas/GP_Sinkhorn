@@ -6,3 +6,5 @@ celluloid==0.2.0
 pyro-api==0.1.2
 pyro-ppl==1.5.1
 jupyter
+GPy
+pods
