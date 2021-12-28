@@ -1,7 +1,7 @@
 import torch
 import math
 
-def solve_sde_RK(b_drift=None, sigma=None, X0=None, dt=1.0, N=100, t0=0.0,
+def solve_sde_RK(b_drift, sigma, X0=None, dt=1.0, N=100, t0=0.0,
                  theta=None, noise=False, forwards=True, device=None):
     """ Euler Mayurama method
     Syntax:
@@ -22,9 +22,7 @@ def solve_sde_RK(b_drift=None, sigma=None, X0=None, dt=1.0, N=100, t0=0.0,
                  (default: 0)
     """
     N = int(N) + 1
-    if b_drift is None or sigma is None:
-        raise ValueError("Error: SDE not defined.")
-
+    
     n, d, *_ = X0.shape
 
     T = torch.tensor(dt * N).to(device)

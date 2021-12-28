@@ -16,7 +16,8 @@ class GPRegression_fast(gp.models.GPRegression):
     def __init__(self, X, y, kernel, noise=None, mean_function=None, 
                  jitter=1e-6, precompute_inv=None):
         with torch.no_grad():
-            if isinstance(kernel, Product): kernel = deepcopy(kernel)
+            if isinstance(kernel, Product): 
+                kernel = deepcopy(kernel)
 
             self.mean_flag = mean_function
             if mean_function is not None:
@@ -24,7 +25,7 @@ class GPRegression_fast(gp.models.GPRegression):
                                  jitter=jitter, noise=noise)
             else:
                 super().__init__(X, y, kernel, jitter=jitter, noise=noise)
-            if precompute_inv == None:
+            if precompute_inv is None:
                 N = self.X.size(0)
                 Kff = self.kernel(self.X).contiguous()
 
@@ -83,9 +84,9 @@ class GPRegression_fast(gp.models.GPRegression):
 
 class MultitaskGPModel():
     """
-    Independant (block diagonal K) Multioutput GP model
+    Independent (block diagonal K) Multioutput GP model
     
-    Fits a seperate GP per dimension for the SDE drift estimation
+    Fits a separate GP per dimension for the SDE drift estimation
     """
 
     def __init__(self, X, y, noise=.1, dt=1, kern=gp.kernels.RBF, 
@@ -96,16 +97,15 @@ class MultitaskGPModel():
         :param X[nxd' ndarray]: input X for GP (Flatened AR time series)
         :param y[nxd]: multioutput targets for GP
         :param dt[float]: stepsize of SDE discretisation
-        :param kern[a -> gp.krenls.Base]: function that takes in parameter
-                                          and returns a kernel. Can be
-                                          used in conjunction to functools
-                                          partial to specify paramas a priori
+        :param kern[a -> gp.kernels.Base]: function that takes in parameter
+                                           and returns a kernel. Can be
+                                           used in conjunction to functools
+                                           partial to specify params a priori
         """
         self.dim = y.shape[1]
         self.gpr_list = []
         if isinstance(kern, Kernel):
             kernel = deepcopy(kern)
-#             import pdb; pdb.set_trace()
         else:
             # changed from Matern32
             kernel = kern(input_dim=X.shape[1], variance=torch.tensor(1.0 / dt)) 

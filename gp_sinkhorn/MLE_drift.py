@@ -37,9 +37,9 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
     :param dt [float]: time interval seperation between time points (sample 
         rate)
     
-    :param num_data_points[int]: Number of inducing samples(inducing points) 
+    :param num_data_points[int]: Number of inducing samples (inducing points) 
         from the boundary distributions
-    :param num_time_points[int]: Number of inducing timesteps(inducing points) 
+    :param num_time_points[int]: Number of inducing timesteps (inducing points) 
         for the EM approximation
     
     :return [nx(d+1) ndarray-> nxd ndarray]: returns fitted drift
@@ -58,7 +58,7 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
                                       gp_mean_function=gp_mean_function) 
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
     
-    def gp_ou_drift(x,debug=False):
+    def gp_ou_drift(x, debug=False):
         return gp_drift_model.predict(x, debug=debug)
 
 #     # Extract mean drift
@@ -104,7 +104,7 @@ def fit_drift_nn(Xts, N, dt, num_data_points=10, num_time_points=50,
     # Drop the last timepoint in each timeseries
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) 
     
-    n,d = Xs.shape
+    n, d = Xs.shape
 
     nn_drift_model = nn_model(input_size=d).double().to(device) #Setup the NN
     train_nn(nn_drift_model, Xs, Ys)
@@ -294,8 +294,8 @@ def MLE_IPFP(
             sigma *= decay_sigma
 
         gc.collect() # fixes odd memory leak
-        if log_dir != None :
-            pickle.dump(result,open(log_dir+ "/result_"+str(i)+".pkl","wb"))
+        if log_dir is not None:
+            pickle.dump(result, open(f"{log_dir}/result_{i}.pkl" , "wb"))
 
 
     
@@ -306,8 +306,8 @@ def MLE_IPFP(
     T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N, 
                         device=device)
     result.append([T, M, T2, M2])
-    if log_dir != None:
-        pickle.dump(result, open(log_dir + "/result_final.pkl", "wb"))
+    if log_dir is not None:
+        pickle.dump(result, open(f"{log_dir}/result_final.pkl", "wb"))
         
     if plot:
         auxiliary_plot_routine_end(Xts, t, prior_X_0, X_1, drift_backward, 
