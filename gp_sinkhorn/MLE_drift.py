@@ -275,8 +275,9 @@ def MLE_IPFP(
 
         drift_backward = fit_drift(
             Xts, N=N, dt=dt, num_data_points=num_data_points,
+            num_time_points=num_time_points, kernel=kernel, 
+            noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
-            device=device
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
             # but that doesnt work as well,
