@@ -12,6 +12,27 @@ In the root directory of this project run
 $ pip install -e .
 ```
 
+# Cite
+
+Paper: https://www.mdpi.com/1099-4300/23/9/1134
+
+Bibtex:
+
+```
+@Article{e23091134,
+AUTHOR = {Vargas, Francisco and Thodoroff, Pierre and Lamacraft, Austen and Lawrence, Neil},
+TITLE = {Solving Schrödinger Bridges via Maximum Likelihood},
+JOURNAL = {Entropy},
+VOLUME = {23},
+YEAR = {2021},
+NUMBER = {9},
+ARTICLE-NUMBER = {1134},
+URL = {https://www.mdpi.com/1099-4300/23/9/1134},
+ISSN = {1099-4300},
+DOI = {10.3390/e23091134}
+}
+```
+
 # Main Experiments
 
 * See https://github.com/franciscovargas/GP_Sinkhorn/blob/main/notebooks/Well-big-Wall-Algorithmic-Kernels.ipynb for the Well experiments
