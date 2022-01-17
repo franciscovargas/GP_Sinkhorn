@@ -114,7 +114,7 @@ class MultitaskGPModel():
         noise = [noise] * y.shape[1] if isinstance(noise, (int, float)) else noise  
         for i in range(y.shape[1]):
             gp_mean_function_i = (
-                lambda xx: gp_mean_function(xx)[:, i].reshape(-1)
+                (lambda xx: gp_mean_function(xx)[:, i].reshape(-1))
                 if gp_mean_function 
                 else None)
 #                 if gp_mean_function_i is not None:
