@@ -191,9 +191,13 @@ def MLE_IPFP(
     dt = 1.0 / N
     
     pow_ = int(math.floor(iteration / div))
-    observation_noise = (sigma ** 2 if decay_sigma == 1.0 
-                         else (sigma * (decay_sigma ** pow_)) ** 2)
+
     
+    if isinstance(sigma, tuple):
+        observation_noise = sigma[0] ** 2
+    else:
+        observation_noise = (sigma ** 2 if decay_sigma == 1.0 
+                             else (sigma * (decay_sigma ** pow_)) ** 2)
     if langevin:
         d = sigma.shape[0]
         sigma[:int(d * 0.5)] = 0
@@ -217,7 +221,7 @@ def MLE_IPFP(
         noise=observation_noise, gp_mean_function=prior_drift, device=device
     )
     
-    if plot:
+    if plot and isinstance(sigma, (int, float)):
         auxiliary_plot_routine_init(Xts, t, prior_X_0, X_1, drift_backward, 
                                     sigma, N, dt, device)
 
@@ -310,7 +314,7 @@ def MLE_IPFP(
     if log_dir is not None:
         pickle.dump(result, open(f"{log_dir}/result_final.pkl", "wb"))
         
-    if plot:
+    if plot and isinstance(sigma, (int, float)):
         auxiliary_plot_routine_end(Xts, t, prior_X_0, X_1, drift_backward, 
                                    sigma, N, dt, device)
         
