@@ -125,7 +125,7 @@ def MLE_IPFP(
         X_0, X_1, N=10, sigma=1, iteration=10, prior_drift=None,
         num_data_points=10, num_time_points=50, prior_X_0=None, prior_Xts=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
-        kernel=gp.kernels.RBF, observation_noise=1.0, decay_sigma=1, 
+        kernel=gp.kernels.Exponential, observation_noise=1.0, decay_sigma=1, 
         refinement_iterations=5, div=1, gp_mean_prior_flag=False, log_dir=None,
         verbose=0, langevin=False, nn=False, device=None
     ):
