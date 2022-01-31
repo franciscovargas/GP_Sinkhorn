@@ -1,6 +1,8 @@
 import torch
 import math
 
+import numpy as np
+
 def solve_sde_RK(b_drift, sigma, X0=None, dt=1.0, N=100, t0=0.0,
                  theta=None, noise=False, forwards=True, device=None):
     """ Euler Mayurama method
@@ -33,12 +35,21 @@ def solve_sde_RK(b_drift, sigma, X0=None, dt=1.0, N=100, t0=0.0,
 
     t0rep = (t0 * torch.ones((X0.shape[0], 1)).double().to(device) if forwards
              else (T - t0) * torch.ones((X0.shape[0], 1)).double().to(device))
+
+    if isinstance(sigma, (int, float)):
+        sigmas = np.repeat(sigma, N)
+    elif isinstance(sigma, tuple):
+        # wedge shape: increasing from sigma_min up to sigma_max then decreasing
+        sigma_min, sigma_max = sigma
+        m = 2 * (sigma_max - sigma_min) / (N * dt)  # gradient
+        sigmas = sigma_max - m * np.abs(ti.detach().cpu().numpy() - (t0 + 0.5 * N * dt))
+
     Y = torch.cat((X0.to(device), t0rep), axis=1)[:, None, :]
     T = dt * N
     for n in range(N - 1):
         t = ti[n + 1]
         b, DW_n = b_drift(Y[:, n, :]), DWs[:, n, :]
-        newY = Y[:, n, :-1] + b * dt + sigma * DW_n
+        newY = Y[:, n, :-1] + b * dt + sigmas[n + 1] * DW_n
 
         trep = (t.repeat(newY.shape[0]).reshape(-1, 1) if forwards
                 else T - t.repeat(newY.shape[0]).reshape(-1, 1))
