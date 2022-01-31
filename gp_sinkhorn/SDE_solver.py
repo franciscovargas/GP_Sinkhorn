@@ -37,12 +37,12 @@ def solve_sde_RK(b_drift, sigma, X0=None, dt=1.0, N=100, t0=0.0,
              else (T - t0) * torch.ones((X0.shape[0], 1)).double().to(device))
 
     if isinstance(sigma, (int, float)):
-        sigmas = np.repeat(sigma, N)
+        sigmas = torch.full((N,), sigma).to(device)
     elif isinstance(sigma, tuple):
         # wedge shape: increasing from sigma_min up to sigma_max then decreasing
         sigma_min, sigma_max = sigma
         m = 2 * (sigma_max - sigma_min) / (N * dt)  # gradient
-        sigmas = sigma_max - m * torch.abs(ti - (t0 + 0.5 * N * dt))
+        sigmas = (sigma_max - m * torch.abs(ti - (t0 + 0.5 * N * dt))).double().to(device)
 
     Y = torch.cat((X0.to(device), t0rep), axis=1)[:, None, :]
     T = dt * N
