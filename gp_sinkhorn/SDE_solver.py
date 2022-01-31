@@ -42,7 +42,7 @@ def solve_sde_RK(b_drift, sigma, X0=None, dt=1.0, N=100, t0=0.0,
         # wedge shape: increasing from sigma_min up to sigma_max then decreasing
         sigma_min, sigma_max = sigma
         m = 2 * (sigma_max - sigma_min) / (N * dt)  # gradient
-        sigmas = sigma_max - m * np.abs(ti.detach().cpu().numpy() - (t0 + 0.5 * N * dt))
+        sigmas = sigma_max - m * torch.abs(ti - (t0 + 0.5 * N * dt))
 
     Y = torch.cat((X0.to(device), t0rep), axis=1)[:, None, :]
     T = dt * N
