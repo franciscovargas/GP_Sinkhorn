@@ -208,8 +208,9 @@ def MLE_IPFP(
     t, Xts = solve_sde_RK(b_drift=prior_drift, sigma=sigma, X0=prior_X_0, dt=dt, 
                           N=N, device=device)
 
-    T_,M_ = copy.deepcopy(t),copy.deepcopy(Xts)
-
+    T_ = copy.deepcopy(t)
+    M_ = copy.deepcopy(Xts)
+    
     if prior_Xts is not None:
         Xts[:, :, :-1] = prior_Xts.flip(1) # Reverse the series
     else:
@@ -243,9 +244,9 @@ def MLE_IPFP(
             print("Forward drift solved in ", time.time() - t0)
         del drift_forward
         gc.collect()
-        # plot_trajectories_2(Xts, t)
-        T2 = copy.deepcopy(torch.tensor(t))
-        M2 = copy.deepcopy(torch.tensor(Xts))
+
+        T2 = copy.deepcopy(t.clone().detach())
+        M2 = copy.deepcopy(Xts.clone().detach())
         
         if i == 0: result.append([T_, M_, T2, M2])
         # Reverse the series
@@ -270,9 +271,9 @@ def MLE_IPFP(
                               N=N, device=device)
         del drift_backward
         gc.collect()
-
-        T = copy.deepcopy(torch.tensor(t.detach()))
-        M = copy.deepcopy(torch.tensor(Xts.detach()))
+        
+        T = copy.deepcopy(t.clone().detach())
+        M = copy.deepcopy(Xts.clone().detach())
 
         # Reverse the series
         Xts[:, :, :-1] = Xts[:, :, :-1].flip(1)
