@@ -4,6 +4,9 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
+from scipy.spatial.distance import cdist
+from scipy.optimize import linear_sum_assignment
+
 def plot_trajectories_both_3d(Xts, t , Xts_, t_, name=None):
 
     fn = 14
@@ -57,3 +60,36 @@ def display_result(result, X1, X2):
     plot_tensor(X1, "orange")
     plot_tensor(M2[:, -1, :], "blue")    
     plt.show()
+    
+def emd(Y0, Y1):
+    # TODO: do they really have to have the same length? Not really
+    assert(len(Y0) == len(Y1))
+    d = cdist(Y0, Y1)
+    assignment = linear_sum_assignment(d)
+    return d[assignment].sum() / len(Y0)
+
+def cpu(x):
+    """ Convenience function for using cpu 
+        numpy arrays in plotting etc.
+    """
+    return (x.detach().cpu().numpy() 
+            if isinstance(x, torch.Tensor) 
+            else x)
+
+def result_to_cpu(res):
+    return [list(map(lambda x: x.detach().cpu().numpy(), res_i)) 
+            for res_i in res]
+
+def iter_emds(result, target):
+    """ EMD to final bridge in each iteration. """
+    return [emd(target, res[1][:, -1, :][:, :2]) 
+            for res in result]
+    
+def time_emds(result, target):
+    """ EMD to each time step distribution in the bridge. """
+    M_final = result[-1][1]
+    return [emd(target, M_final[:, i, :][:, :2]) 
+            for i in range(M_final.shape[1])]
+
+def final_emd(result, target):
+    return emd(target, result[-1][1][:, -1, :][:, :2])
