@@ -19,7 +19,7 @@ def plot_trajectories_both_3d(Xts, t , Xts_, t_, name=None):
     ax.set_zlabel("$y(t)$", fontsize=fn)
     for i in range(n):
         label = "$\mathbb{Q}$: Forward process" if i == 0 else None
-        ti, xi = t.cpu().flatten(), Xts[i, :, :-1].detach().cpu().numpy()
+        ti, xi = t.cpu().numpy().flatten(), Xts[i, :, :-1].detach().cpu().numpy()
         ax.plot(ti, xi[:, 0], xi[:, 1],  'b', alpha=0.3,  label=label)
     
     ax.legend(fontsize=fn)
@@ -36,7 +36,7 @@ def plot_trajectories_both_3d(Xts, t , Xts_, t_, name=None):
     ax.set_xticklabels(list(map (lambda x: '{0:.2f}'.format((x)), tt))[::-1])
     for i in range(n):
         label = "$\mathbb{P}$: Reverse process" if i == 0 else None
-        ti, xi = t_.cpu().flatten(), Xts_[i,:, :-1].detach().cpu().numpy()
+        ti, xi = t_.cpu().numpy().flatten(), Xts_[i,:, :-1].detach().cpu().numpy()
         ax.plot(ti, xi[:,0], xi[:,1], 'r', alpha=0.3, label=label)
 
     ax.legend(fontsize=fn)
