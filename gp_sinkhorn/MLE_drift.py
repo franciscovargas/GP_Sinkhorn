@@ -1,7 +1,7 @@
 import pickle
 import torch
 from gp_sinkhorn.SDE_solver import solve_sde_RK
-from gp_sinkhorn.GP import MultitaskGPModel
+from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
 from gp_sinkhorn.NN import Feedforward, train_nn
 from gp_sinkhorn.utils import (auxiliary_plot_routine_init, 
                                auxiliary_plot_routine_end)
@@ -16,7 +16,7 @@ import time
 
 def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50, 
                  kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, 
-                 device=None):
+                 sparse=False, device=None):
     """
     This function transforms a set of timeseries into an autoregression problem 
     and estimates the drift function using GPs following:
@@ -54,8 +54,15 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) 
 
     # Set up GP
-    gp_drift_model = MultitaskGPModel(Xs, Ys, dt=1, kern=kernel, noise=noise, 
-                                      gp_mean_function=gp_mean_function) 
+
+    if sparse:
+        gp_drift_model = MultitaskGPModelSparse(
+            Xs, Ys, dt=1, kern=kernel, noise=noise, 
+            gp_mean_function=gp_mean_function, num_data_points=num_data_points, 
+            num_time_points=num_time_points, device=device) 
+    else:
+        gp_drift_model = MultitaskGPModel(Xs, Ys, dt=1, kern=kernel, noise=noise, 
+                                        gp_mean_function=gp_mean_function) 
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
     
     def gp_ou_drift(x, debug=False):
@@ -127,7 +134,7 @@ def MLE_IPFP(
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.Exponential, observation_noise=1.0, decay_sigma=1, 
         refinement_iterations=5, div=1, gp_mean_prior_flag=False, log_dir=None,
-        verbose=0, langevin=False, nn=False, device=None
+        verbose=0, langevin=False, nn=False, device=None, sparse=False,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from 
@@ -208,7 +215,8 @@ def MLE_IPFP(
     t, Xts = solve_sde_RK(b_drift=prior_drift, sigma=sigma, X0=prior_X_0, dt=dt, 
                           N=N, device=device)
 
-    T_,M_ = copy.deepcopy(t),copy.deepcopy(Xts)
+    T_ = copy.deepcopy(t)
+    M_ = copy.deepcopy(Xts)
 
     if prior_Xts is not None:
         Xts[:, :, :-1] = prior_Xts.flip(1) # Reverse the series
@@ -218,7 +226,8 @@ def MLE_IPFP(
     drift_backward = fit_drift(
         Xts, N=N, dt=dt, num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior, kernel=kernel, 
-        noise=observation_noise, gp_mean_function=prior_drift, device=device
+        noise=observation_noise, gp_mean_function=prior_drift, device=device,
+        sparse=sparse
     )
     
     if plot and isinstance(sigma, (int, float)):
@@ -244,8 +253,8 @@ def MLE_IPFP(
         del drift_forward
         gc.collect()
         # plot_trajectories_2(Xts, t)
-        T2 = copy.deepcopy(torch.tensor(t))
-        M2 = copy.deepcopy(torch.tensor(Xts))
+        T2 = copy.deepcopy(t.clone().detach())
+        M2 = copy.deepcopy(Xts.clone().detach())
         
         if i == 0: result.append([T_, M_, T2, M2])
         # Reverse the series
@@ -259,6 +268,7 @@ def MLE_IPFP(
             num_time_points=num_time_points, kernel=kernel, 
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
+            sparse=sparse,
         )
         if verbose:
             print("Fitting drift solved in ", time.time() - t0)
@@ -271,8 +281,8 @@ def MLE_IPFP(
         del drift_backward
         gc.collect()
 
-        T = copy.deepcopy(torch.tensor(t.detach()))
-        M = copy.deepcopy(torch.tensor(Xts.detach()))
+        T = copy.deepcopy(t.clone().detach())
+        M = copy.deepcopy(Xts.clone().detach())
 
         # Reverse the series
         Xts[:, :, :-1] = Xts[:, :, :-1].flip(1)
@@ -282,6 +292,7 @@ def MLE_IPFP(
             num_time_points=num_time_points, kernel=kernel, 
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
+            sparse=sparse,
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
             # but that doesnt work as well,
