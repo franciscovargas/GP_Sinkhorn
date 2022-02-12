@@ -217,7 +217,6 @@ def MLE_IPFP(
 
     T_ = copy.deepcopy(t)
     M_ = copy.deepcopy(Xts)
-
     if prior_Xts is not None:
         Xts[:, :, :-1] = prior_Xts.flip(1) # Reverse the series
     else:
@@ -252,7 +251,6 @@ def MLE_IPFP(
             print("Forward drift solved in ", time.time() - t0)
         del drift_forward
         gc.collect()
-        # plot_trajectories_2(Xts, t)
         T2 = copy.deepcopy(t.clone().detach())
         M2 = copy.deepcopy(Xts.clone().detach())
         
@@ -280,7 +278,7 @@ def MLE_IPFP(
                               N=N, device=device)
         del drift_backward
         gc.collect()
-
+        
         T = copy.deepcopy(t.clone().detach())
         M = copy.deepcopy(Xts.clone().detach())
 
