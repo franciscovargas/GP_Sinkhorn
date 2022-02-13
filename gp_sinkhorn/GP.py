@@ -172,6 +172,7 @@ class SparseGPRegression_fast(gp.models.SparseGPRegression):
         if mean_function is not None:
             super().__init__(X, y, kernel, Xu, mean_function=mean_function, 
                              jitter=jitter, noise=noise)
+            self.mean_function = lambda x: torch.zeros(*x.shape[:-1]).to(device)
         else:
             super().__init__(X, y, kernel, Xu, jitter=jitter,noise=noise)
         if precompute_inv == None:
@@ -218,16 +219,12 @@ class SparseGPRegression_fast(gp.models.SparseGPRegression):
         
         # get y_residual and convert it into 2D tensor for packing
         mu = self.mean_function(self.X)
-        
-        if isinstance(mu, int):
-            mu = self.y.reshape(-1, 1) * 0
-                                
+
         y_residual = self.y.reshape(*mu.shape) - mu
         y_2D = y_residual.reshape(-1, N).t()
         W_Dinv_y = self.W_Dinv.matmul(y_2D)
         
         if reuse_kernel is None:           
-
             Kus = self.kernel(self.Xu, Xnew)
             Ws = Kus.triangular_solve(self.Luu, upper=False)[0]
             reuse_kernel = Ws
@@ -241,16 +238,9 @@ class SparseGPRegression_fast(gp.models.SparseGPRegression):
         
         C = Xnew.size(0)
         loc_shape = self.y.shape[:-1] + (C,)
-        
-#         loc = Linv_W_Dinv_y[:, 0:1].t().matmul(Linv_Ws).reshape(loc_shape)
-#         import pdb;pdb.set_trace()
         loc = Linv_W_Dinv_y.t().matmul(Linv_Ws).reshape(loc_shape)
 
         mu_new = self.mean_function(Xnew)
-        
-        if isinstance(mu_new, int):
-            mu_new = loc.reshape(-1, 1) * 0
-            
         return loc.reshape(*mu_new.shape) + mu_new, reuse_kernel
 
 
