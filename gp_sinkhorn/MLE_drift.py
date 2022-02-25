@@ -1,22 +1,24 @@
 import pickle
 import torch
-from gp_sinkhorn.SDE_solver import solve_sde_RK
-from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
-from gp_sinkhorn.NN import Feedforward, train_nn
-from gp_sinkhorn.utils import (auxiliary_plot_routine_init, 
-                               auxiliary_plot_routine_end)
 import pyro.contrib.gp as gp
 import math
-from tqdm import tqdm
 import gc
 import copy
 import time
 
+from tqdm import tqdm
+
+from gp_sinkhorn.SDE_solver import solve_sde_RK
+from gp_sinkhorn.GP import MultitaskGPModel, MultitaskGPModelSparse
+from gp_sinkhorn.NN import Feedforward, train_nn
+from gp_sinkhorn.RFF import RandomFourierFeatures
+from gp_sinkhorn.utils import (auxiliary_plot_routine_init, 
+                               auxiliary_plot_routine_end)
 
 
 def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50, 
                  kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, 
-                 sparse=False, device=None):
+                 sparse=False, device=None, rff=False, num_rff_features=100):
     """
     This function transforms a set of timeseries into an autoregression problem 
     and estimates the drift function using GPs following:
@@ -55,11 +57,16 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
 
     # Set up GP
 
-    if sparse:
+    if rff:
+        rff_model = RandomFourierFeatures(Xs, Ys, num_features=num_rff_features,
+                                          noise=noise, device=device)
+        return rff_model.drift
+    elif sparse:
         gp_drift_model = MultitaskGPModelSparse(
             Xs, Ys, dt=1, kern=kernel, noise=noise, 
             gp_mean_function=gp_mean_function, num_data_points=num_data_points, 
             num_time_points=num_time_points, device=device) 
+
     else:
         gp_drift_model = MultitaskGPModel(Xs, Ys, dt=1, kern=kernel, noise=noise, 
                                         gp_mean_function=gp_mean_function) 
@@ -133,8 +140,9 @@ def MLE_IPFP(
         num_data_points=10, num_time_points=50, prior_X_0=None, prior_Xts=None,
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.Exponential, observation_noise=1.0, decay_sigma=1, 
-        refinement_iterations=5, div=1, gp_mean_prior_flag=False, log_dir=None,
+        div=1, gp_mean_prior_flag=False, log_dir=None, rff=False,
         verbose=0, langevin=False, nn=False, device=None, sparse=False,
+        num_rff_features=100,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from 
@@ -199,7 +207,6 @@ def MLE_IPFP(
     
     pow_ = int(math.floor(iteration / div))
 
-    
     if isinstance(sigma, tuple):
         observation_noise = sigma[0] ** 2
     else:
@@ -217,16 +224,17 @@ def MLE_IPFP(
 
     T_ = copy.deepcopy(t)
     M_ = copy.deepcopy(Xts)
+
     if prior_Xts is not None:
-        Xts[:, :, :-1] = prior_Xts.flip(1) # Reverse the series
+        Xts[:, :, :-1] = prior_Xts.flip(1)  # Reverse the series
     else:
-        Xts[:, :, :-1] = Xts[:, :, :-1].flip(1) # Reverse the series
+        Xts[:, :, :-1] = Xts[:, :, :-1].flip(1)  # Reverse the series
 
     drift_backward = fit_drift(
         Xts, N=N, dt=dt, num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior, kernel=kernel, 
         noise=observation_noise, gp_mean_function=prior_drift, device=device,
-        sparse=sparse
+        sparse=sparse, rff=rff, num_rff_features=num_rff_features
     )
     
     if plot and isinstance(sigma, (int, float)):
@@ -234,12 +242,8 @@ def MLE_IPFP(
                                     sigma, N, dt, device)
 
     result = []
-    
-    prior_drift_backward = copy.deepcopy(drift_backward)
-    
-    iterations = iteration
-
-    for i in tqdm(range(iterations)):
+        
+    for i in tqdm(range(iteration)):
         # Estimate the forward drift
         # Start from the end X_1 and then roll until t=0
         if verbose:
@@ -261,12 +265,13 @@ def MLE_IPFP(
         if verbose:
             print("Fit drift")
             t0 = time.time()
+
         drift_forward = fit_drift(
             Xts, N=N, dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, 
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
-            sparse=sparse,
+            sparse=sparse, rff=rff, num_rff_features=num_rff_features
         )
         if verbose:
             print("Fitting drift solved in ", time.time() - t0)
@@ -290,7 +295,7 @@ def MLE_IPFP(
             num_time_points=num_time_points, kernel=kernel, 
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
-            sparse=sparse,
+            sparse=sparse, rff=rff, num_rff_features=num_rff_features,
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
             # but that doesnt work as well,
@@ -310,12 +315,11 @@ def MLE_IPFP(
         gc.collect() # fixes odd memory leak
         if log_dir is not None:
             pickle.dump(result, open(f"{log_dir}/result_{i}.pkl" , "wb"))
-
-
     
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, 
                           N=N, device=device)
-    if iterations == 0 : return [(None, None, T2, M2)]
+    if iteration == 0:
+        return [(None, None, T2, M2)]
     
     T, M = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt, N=N, 
                         device=device)
