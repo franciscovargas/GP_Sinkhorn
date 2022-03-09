@@ -18,7 +18,7 @@ from gp_sinkhorn.utils import (auxiliary_plot_routine_init,
 
 def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50, 
                  kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, 
-                 sparse=False, device=None, rff=False, num_rff_features=1000):
+                 nystrom=False, device=None, rff=False, num_rff_features=1000):
     """
     This function transforms a set of timeseries into an autoregression problem 
     and estimates the drift function using GPs following:
@@ -61,7 +61,7 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
         rff_model = RandomFourierFeatures(Xs, Ys, num_features=num_rff_features,
                                           noise=noise, device=device)
         return rff_model.drift
-    elif sparse:
+    elif nystrom:
         gp_drift_model = MultitaskGPModelSparse(
             Xs, Ys, dt=1, kern=kernel, noise=noise, 
             gp_mean_function=gp_mean_function, num_data_points=num_data_points, 
@@ -141,7 +141,7 @@ def MLE_IPFP(
         num_data_points_prior=None, num_time_points_prior=None, plot=False,
         kernel=gp.kernels.Exponential, observation_noise=1.0, decay_sigma=1, 
         div=1, gp_mean_prior_flag=False, log_dir=None, rff=False,
-        verbose=0, langevin=False, nn=False, device=None, sparse=False,
+        verbose=0, langevin=False, nn=False, device=None, nystrom=False,
         num_rff_features=100, debug_rff=False
     ):
     """
@@ -234,7 +234,7 @@ def MLE_IPFP(
         Xts, N=N, dt=dt, num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior, kernel=kernel, 
         noise=observation_noise, gp_mean_function=prior_drift, device=device,
-        sparse=sparse, rff=rff, num_rff_features=num_rff_features,
+        nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
         debug_gp=debug_rff
     )
     
@@ -272,7 +272,7 @@ def MLE_IPFP(
             num_time_points=num_time_points, kernel=kernel, 
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
-            sparse=sparse, rff=rff, num_rff_features=num_rff_features,
+            nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
             debug_gp=debug_rff
         )
         if verbose:
@@ -297,7 +297,7 @@ def MLE_IPFP(
             num_time_points=num_time_points, kernel=kernel, 
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
-            sparse=sparse, rff=rff, num_rff_features=num_rff_features,
+            nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
             debug_gp=debug_rff
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
