@@ -95,7 +95,7 @@ class RandomFourierFeatures:
             variance = sigma_new * torch.eye(dim_x)
             def sample_exp(sample_shape):
                 gammas = torch.tile(Gamma(0.5, 0.5).sample(sample_shape).to(self.device), 
-                                    (self.num_features, 1)).T
+                                    (dim_x, 1)).T
                 gaussians = MultivariateNormal(mean, variance).sample(sample_shape).to(self.device)
                 return gaussians / torch.sqrt(gammas)
             return sample_exp
