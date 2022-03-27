@@ -59,7 +59,7 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
 
     if rff:
         rff_model = RandomFourierFeatures(Xs, Ys, num_features=num_rff_features,
-                                          noise=noise, device=device)
+                                          kernel=kernel, noise=noise, device=device)
         return rff_model.drift
     elif nystrom:
         gp_drift_model = MultitaskGPModelSparse(
