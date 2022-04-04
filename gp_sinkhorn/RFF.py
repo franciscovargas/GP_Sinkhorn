@@ -9,7 +9,9 @@ from torch.distributions.gamma import Gamma
 from torch.distributions.multivariate_normal import MultivariateNormal
 from pyro.contrib.gp.kernels import Exponential, RBF, Kernel
 
-_SUPPORTED_KERNELS = (Exponential, RBF)
+from gp_sinkhorn.arccos import ArcCos
+
+_SUPPORTED_KERNELS = (Exponential, RBF, ArcCos)
 
 class RandomFourierFeatures:
 
@@ -27,14 +29,22 @@ class RandomFourierFeatures:
         self.noise = noise + jitter
         self.sin_cos = sin_cos
 
-        self.f_kernel = self.fourier_transform(self.kernel)
-        
-        # API consideration: should we pass result back, or just set 
-        # the member variables within the init_params method?
-        self.init_params()
+
+        ac = isinstance(self.kernel, ArcCos)
+
+        self.feature_mapping_fn = (
+            self.feature_mapping_nn_simple_2 if ac else
+            self.feature_mapping)
+
+        if not ac:
+            self.f_kernel = self.fourier_transform(self.kernel)
+            
+            # API consideration: should we pass result back, or just set 
+            # the member variables within the init_params method?
+            self.init_params()
         self.variance = self.kernel.variance
 
-        self.phi = self.feature_mapping(self.x)
+        self.phi = self.feature_mapping_fn(self.x)
 
         if debug_rff:
             self.drift = self.predict_gp
@@ -54,7 +64,7 @@ class RandomFourierFeatures:
                     self.phi.t().mm(self.y[:, i][:, None])).solution
                 
 #                 solution = self.solve_w(self.phi, self.y[:, i][:, None], 
-#                                         lambda_=self.noise)
+#                                         lambda_=self.jitter + self.noise)
     
                 self.ws.append(solution)
     
@@ -73,7 +83,6 @@ class RandomFourierFeatures:
         return kernel
 
     def debug_kernel(self):    
-        """ Return exact and approx kernels for debugging. """
         kernel_exact = self.kernel.forward(self.x)
         kernel_approx = self.phi @ self.phi.t()
         return kernel_exact, kernel_approx
@@ -82,6 +91,9 @@ class RandomFourierFeatures:
     def fourier_transform(self, kernel):
         """ Compute the Fourier Transform of the kernel, returning a sampling
             function for the transformed density.
+
+            Each sample of the resulting function is a vector of length dim_x; 
+            so sample_fn([n]) has shape n x dim_x.
         """
         dim_x = self.x.shape[1]
         mean = torch.zeros(dim_x)
@@ -130,11 +142,11 @@ class RandomFourierFeatures:
 
 
     def predict_gp(self, x_pred):
-        """ Use the full gp equation to predict the value 
+        """ Use the full GP equation to predict the value 
             for y_pred, performing the regression once per dimension.
         """
         total = torch.zeros([x_pred.shape[0], self.y.shape[1]], device=self.device)
-        phi_pred = self.feature_mapping(x_pred)
+        phi_pred = self.feature_mapping_fn(x_pred)
 
         for i in range(self.y.shape[1]):
 
@@ -152,8 +164,61 @@ class RandomFourierFeatures:
             for y_pred, performing the regression once per dimension.
         """
         total = torch.zeros([x_pred.shape[0], self.y.shape[1]], device=self.device)
-        phi_pred = self.feature_mapping(x_pred)
+        phi_pred = self.feature_mapping_fn(x_pred)
         for i in range(self.y.shape[1]):
             w = self.ws[i]
             total[:, i] = torch.squeeze(phi_pred.matmul(w))
         return total
+    
+    def feature_mapping_nn(self, x, s=1, kappa=1e-6):
+        """ Slightly edited from the Scetbon repo. """
+        n, dim_x = x.shape
+        variance = self.variance
+        C = (variance ** (dim_x / 2)) * np.sqrt(2)
+        U = MultivariateNormal(torch.zeros(dim_x), variance * torch.eye(dim_x)
+            ).sample([self.num_features]).to(self.device).t().double()
+
+        IP = x.mm(U)
+
+        res_trans = C * (torch.maximum(IP, torch.tensor(0)) ** s)
+
+        V = (variance - 1) / variance
+        V = -(1 / 4) * V * torch.sum(U ** 2, axis=0)
+        V = torch.exp(V)
+
+        res = torch.zeros((n, self.num_features + 1), dtype=float)
+
+        res[:, :self.num_features] = (1 / math.sqrt(self.num_features)) * res_trans * V
+        res[:, -1] = kappa
+
+        scaling = math.sqrt(2 / self.num_features) * torch.sqrt(variance)
+        return res.to(self.device) * scaling
+    
+    def feature_mapping_nn_simple(self, x, s=1, kappa=1e-6):
+        """ Simpler version of the Scetbon code: without the fancy multipliers. """
+        n, dim_x = x.shape
+        variance = self.variance
+        U = MultivariateNormal(torch.zeros(dim_x), variance * torch.eye(dim_x)
+            ).sample([self.num_features]).to(self.device).t().double()
+
+        IP = x.mm(U)
+        scaling = math.sqrt(2 / self.num_features) * torch.sqrt(variance) * math.sqrt(2)
+        
+        return scaling * math.sqrt(2) * (torch.maximum(IP, torch.tensor(0)) ** s)
+
+    def feature_mapping_nn_simple_2(self, x, s=1):
+        """ Hand-made simple version based on the derivation in 
+            https://hackmd.io/s94U56TbScyPp6-gAjHusw?view
+        """
+        n, dim_x = x.shape
+        variance = self.variance
+        variance_w = 1e4
+        variance_b = 1e4
+        
+        w = torch.normal(0, math.sqrt(variance_w), size=(dim_x, self.num_features)).to(self.device).double()
+        b = torch.normal(0, math.sqrt(variance_b), size=(1, self.num_features)).to(self.device).double()
+
+        IP = x.mm(w) + b
+        scaling = math.sqrt(2 / self.num_features) * math.sqrt(variance)
+
+        return scaling * (torch.maximum(IP, torch.tensor(0)) ** s) 
