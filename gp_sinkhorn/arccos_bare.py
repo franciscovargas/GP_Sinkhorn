@@ -17,25 +17,23 @@ class NNKernel(nn.Module):
         self.variance_b = variance_b
         self.variance_w = variance_w
     
+
+    def dim_sum(self, mat, dim=2):           
+        return self.variance_w * 0.5 * mat.sum(dim) + self.variance_b
+
     def forward(self, x, y=None):
 
         if y is None:
             y = x
-        
-        N1 = x.size(0)
-        N2 = y.size(0)
 
-        # xy: (N1, N2, dim_x)   (x: (N1, dim_x); y: (N2, dim_x))
+        # xy: (len(x), len(y), dim_x)   (x: (len(x), dim_x); y: (len(y), dim_x))
         xy = x.unsqueeze(1) * y
         xx = x ** 2
         yy = y ** 2
 
-        def f(patch, dim_sum=2):           
-            return self.variance_w * 0.5 * patch.sum(dim_sum) + self.variance_b
-        
-        xy = f(xy, dim_sum=2)
-        xx = f(xx, dim_sum=1)
-        yy = f(yy, dim_sum=1)
+        xy = self.dim_sum(xy, dim=2)
+        xx = self.dim_sum(xx, dim=1)
+        yy = self.dim_sum(yy, dim=1)
 
         xx_yy = torch.outer(xx, yy) + self.f32_tiny
         cos_theta = (xy * xx_yy.rsqrt()).clamp(-1, 1)
