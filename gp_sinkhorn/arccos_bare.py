@@ -22,19 +22,12 @@ class NNKernel(nn.Module):
         return self.variance_w * 0.5 * mat.sum(dim) + self.variance_b
 
     def forward(self, x, y=None):
-
         if y is None:
             y = x
 
         xy = self.variance_w * 0.5 * x.mm(y.T) + self.variance_b
-
         xx = self.dim_sum(x ** 2, dim=1)
         yy = self.dim_sum(y ** 2, dim=1)
-
-        # xx = self.variance_w * 0.5 * x.dot(x) + self.variance_b
-        # yy = self.variance_w * 0.5 * y.dot(y) + self.variance_b
-
-        # xx = x.mm(x.t())
 
         xx_yy = torch.outer(xx, yy) + self.f32_tiny
         cos_theta = (xy * xx_yy.rsqrt()).clamp(-1, 1)
