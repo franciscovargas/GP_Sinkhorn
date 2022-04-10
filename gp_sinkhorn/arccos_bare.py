@@ -26,14 +26,15 @@ class NNKernel(nn.Module):
         if y is None:
             y = x
 
-        # xy: (len(x), len(y), dim_x)   (x: (len(x), dim_x); y: (len(y), dim_x))
-        xy = x.unsqueeze(1) * y
-        xx = x ** 2
-        yy = y ** 2
+        xy = self.variance_w * 0.5 * x.mm(y.T) + self.variance_b
 
-        xy = self.dim_sum(xy, dim=2)
-        xx = self.dim_sum(xx, dim=1)
-        yy = self.dim_sum(yy, dim=1)
+        xx = self.dim_sum(x ** 2, dim=1)
+        yy = self.dim_sum(y ** 2, dim=1)
+
+        # xx = self.variance_w * 0.5 * x.dot(x) + self.variance_b
+        # yy = self.variance_w * 0.5 * y.dot(y) + self.variance_b
+
+        # xx = x.mm(x.t())
 
         xx_yy = torch.outer(xx, yy) + self.f32_tiny
         cos_theta = (xy * xx_yy.rsqrt()).clamp(-1, 1)
