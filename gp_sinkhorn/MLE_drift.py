@@ -18,7 +18,8 @@ from gp_sinkhorn.utils import (auxiliary_plot_routine_init,
 
 def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50, 
                  kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, 
-                 nystrom=False, device=None, rff=False, num_rff_features=1000):
+                 nystrom=False, device=None, rff=False, num_rff_features=1000,
+                 debug_rff=False):
     """
     This function transforms a set of timeseries into an autoregression problem 
     and estimates the drift function using GPs following:
@@ -59,7 +60,8 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
 
     if rff:
         rff_model = RandomFourierFeatures(Xs, Ys, num_features=num_rff_features,
-                                          kernel=kernel, noise=noise, device=device)
+                                          kernel=kernel, noise=noise, device=device,
+                                          debug_rff=debug_rff)
         return rff_model.drift
     elif nystrom:
         gp_drift_model = MultitaskGPModelSparse(
@@ -235,7 +237,7 @@ def MLE_IPFP(
         num_time_points=num_time_points_prior, kernel=kernel, 
         noise=observation_noise, gp_mean_function=prior_drift, device=device,
         nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-        debug_gp=debug_rff
+        debug_rff=debug_rff
     )
     
     if plot and isinstance(sigma, (int, float)):
@@ -273,7 +275,7 @@ def MLE_IPFP(
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-            debug_gp=debug_rff
+            debug_rff=debug_rff
         )
         if verbose:
             print("Fitting drift solved in ", time.time() - t0)
@@ -298,7 +300,7 @@ def MLE_IPFP(
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-            debug_gp=debug_rff
+            debug_rff=debug_rff
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
             # but that doesnt work as well,
