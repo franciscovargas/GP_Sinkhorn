@@ -14,9 +14,17 @@ from gp_sinkhorn.arccos import ArcCos
 _SUPPORTED_KERNELS = (Exponential, RBF, ArcCos)
 
 class RandomFourierFeatures:
+    """ Implementation for random features approach to exact kernel 
+        approximation: sample some weights, and use random features to perform
+        regression. 
+
+        Note that the NN kernel is also supported, although technically its 
+        random features are not derived using Fourier analysis.
+    """
 
     def __init__(self, x, y, num_features, kernel=RBF, noise=1, device=None, 
-                 random_seed=None, debug_rff=False, jitter=1e-6, sin_cos=False):
+                 random_seed=None, debug_rff=False, jitter=1e-6, sin_cos=False,
+                 var_w=1, var_b=1):
         if random_seed is not None:
             torch.manual_seed(random_seed)
             np.random.seed(random_seed)
@@ -28,46 +36,38 @@ class RandomFourierFeatures:
         self.kernel = self.init_kernel(kernel)
         self.noise = noise + jitter
         self.sin_cos = sin_cos
+        self.variance_w = var_w
+        self.variance_b = var_b
 
-
-        ac = isinstance(self.kernel, ArcCos)
+        self.arccos = isinstance(self.kernel, ArcCos)
 
         self.feature_mapping_fn = (
-            self.feature_mapping_nn_simple_2 if ac else
-            self.feature_mapping)
+            self.feature_mapping_nn_simple if self.arccos else
+            self.feature_mapping_rff)
 
-        if not ac:
+        if not self.arccos:
             self.f_kernel = self.fourier_transform(self.kernel)
             
-            # API consideration: should we pass result back, or just set 
-            # the member variables within the init_params method?
-            self.init_params()
+        # API consideration: should we pass result back, or just set 
+        # the member variables within the init_params method?
+        self.init_params()
         self.variance = self.kernel.variance
 
         self.phi = self.feature_mapping_fn(self.x)
+        self.phi_t_phi = self.phi.t().mm(self.phi)
+        self.phi_t = self.phi.t()
 
         if debug_rff:
             self.drift = self.predict_gp
         else:
-            self.ws = []
-            for i in range(self.y.shape[1]):  
-                
-                # 3 options for how to solve: vanilla lstsq, lstsq with 
-                # manual regularisation, or fully manual
-                
-#                 solution = torch.linalg.lstsq(self.phi, self.y[:, i]).solution
-                
-                solution = torch.linalg.lstsq(
-                    self.phi.t().mm(self.phi) + (self.noise * 
-                                                  torch.eye(self.phi.shape[1], 
+            # TODO: is this the same as a separate regression per dimension?
+            # When testing with toy examples, I put in assertions to check that
+            # it was equal, and it was
+            with torch.no_grad():
+                self.ws = torch.linalg.lstsq(
+                    self.phi_t_phi + (self.noise * torch.eye(self.phi.shape[1], 
                                                             device=self.device)),
-                    self.phi.t().mm(self.y[:, i][:, None])).solution
-                
-#                 solution = self.solve_w(self.phi, self.y[:, i][:, None], 
-#                                         lambda_=self.jitter + self.noise)
-    
-                self.ws.append(solution)
-    
+                    self.phi_t.mm(self.y)).solution
             self.drift = self.predict
 
     def init_kernel(self, kernel):
@@ -91,9 +91,6 @@ class RandomFourierFeatures:
     def fourier_transform(self, kernel):
         """ Compute the Fourier Transform of the kernel, returning a sampling
             function for the transformed density.
-
-            Each sample of the resulting function is a vector of length dim_x; 
-            so sample_fn([n]) has shape n x dim_x.
         """
         dim_x = self.x.shape[1]
         mean = torch.zeros(dim_x)
@@ -113,11 +110,24 @@ class RandomFourierFeatures:
             return sample_exp
 
     def init_params(self):
-        """ Randomly sample omega and b parameters of appropriate shapes. """
-        self.omega = self.f_kernel([self.num_features]).double().to(self.device).t()
-        self.b = Uniform(0, 2 * math.pi).sample([self.num_features]).to(self.device)
+        """ Randomly sample parameters of appropriate shapes to use in later
+            feature mapping functions. It is crucial to use the same random 
+            weights at train and test time, which is why member variables
+            are set.
+        """
+        if self.arccos:
+            n, dim_x = self.x.shape
 
-    def feature_mapping(self, x):
+            std_w = math.sqrt(self.variance_w  / dim_x)
+            std_b = math.sqrt(self.variance_b)
+
+            self.w0 = torch.normal(0, std_w, size=([dim_x, self.num_features])).double().to(self.device)
+            self.b0 = torch.normal(0, std_b, size=([self.num_features])).to(self.device)
+        else:
+            self.omega = self.f_kernel([self.num_features]).double().to(self.device).t()
+            self.b = Uniform(0, 2 * math.pi).sample([self.num_features]).to(self.device)
+
+    def feature_mapping_rff(self, x):
         """ Map input x into feature space using params b and omega. """
         scaling = math.sqrt(2 / self.num_features) * torch.sqrt(self.variance)
         basis = x.mm(self.omega) + self.b  # Use broadcasting instead of `.repeat`
@@ -163,15 +173,16 @@ class RandomFourierFeatures:
         """ Use the object's weights w and input x_pred to predict the value 
             for y_pred, performing the regression once per dimension.
         """
-        total = torch.zeros([x_pred.shape[0], self.y.shape[1]], device=self.device)
-        phi_pred = self.feature_mapping_fn(x_pred)
-        for i in range(self.y.shape[1]):
-            w = self.ws[i]
-            total[:, i] = torch.squeeze(phi_pred.matmul(w))
-        return total
+        return self.feature_mapping_fn(x_pred).mm(self.ws)
+
     
     def feature_mapping_nn(self, x, s=1, kappa=1e-6):
-        """ Slightly edited from the Scetbon repo. """
+        """ Random feature mapping for NN kernel, using the formula from 
+            Scetbon et. al. (2020).
+        
+            TODO: this is not actually used (as we are still trying to 
+            debug the simple version.
+        """
         n, dim_x = x.shape
         variance = self.variance
         C = (variance ** (dim_x / 2)) * np.sqrt(2)
@@ -194,31 +205,17 @@ class RandomFourierFeatures:
         scaling = math.sqrt(2 / self.num_features) * torch.sqrt(variance)
         return res.to(self.device) * scaling
     
-    def feature_mapping_nn_simple(self, x, s=1, kappa=1e-6):
-        """ Simpler version of the Scetbon code: without the fancy multipliers. """
-        n, dim_x = x.shape
-        variance = self.variance
-        U = MultivariateNormal(torch.zeros(dim_x), variance * torch.eye(dim_x)
-            ).sample([self.num_features]).to(self.device).t().double()
-
-        IP = x.mm(U)
-        scaling = math.sqrt(2 / self.num_features) * torch.sqrt(variance) * math.sqrt(2)
-        
-        return scaling * math.sqrt(2) * (torch.maximum(IP, torch.tensor(0)) ** s)
-
-    def feature_mapping_nn_simple_2(self, x, s=1):
-        """ Hand-made simple version based on the derivation in 
-            https://hackmd.io/s94U56TbScyPp6-gAjHusw?view
+    def feature_mapping_nn_simple(self, x):
+        """ Random feature mapping for the NN kernel, using the basic random 
+            feature formula (that in Cho and Saul (2009)). Take the product 
+            of w with x, add bias b, and use the ReLU nonlearity.
         """
-        n, dim_x = x.shape
-        variance = self.variance
-        variance_w = 1e4
-        variance_b = 1e4
+        x1 = torch.maximum(x.mm(self.w0) + self.b0, torch.tensor(0))
+
+        # Scaling1 is the correct one; so we don't normalise by num_features
+        scaling1 = torch.sqrt(self.variance) * math.sqrt(2)
+        # scaling2 = torch.sqrt(self.variance) * math.sqrt(1 / self.num_features)
+        # scaling3 = torch.sqrt(self.variance) * math.sqrt(2 / self.num_features)
+        # scaling4 = torch.sqrt(self.variance) * math.sqrt(4 / self.num_features)
         
-        w = torch.normal(0, math.sqrt(variance_w), size=(dim_x, self.num_features)).to(self.device).double()
-        b = torch.normal(0, math.sqrt(variance_b), size=(1, self.num_features)).to(self.device).double()
-
-        IP = x.mm(w) + b
-        scaling = math.sqrt(2 / self.num_features) * math.sqrt(variance)
-
-        return scaling * (torch.maximum(IP, torch.tensor(0)) ** s) 
+        return scaling1 * x1
