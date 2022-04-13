@@ -19,7 +19,7 @@ from gp_sinkhorn.utils import (auxiliary_plot_routine_init,
 def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50, 
                  kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, 
                  nystrom=False, device=None, rff=False, num_rff_features=1000,
-                 debug_rff=False):
+                 debug_rff=False, stable=False):
     """
     This function transforms a set of timeseries into an autoregression problem 
     and estimates the drift function using GPs following:
@@ -51,7 +51,8 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
     X_0 = Xts[:, 0, 0].reshape(-1, 1)  
 
     # Autoregressive targets y = (X_{t+e} - X_t)/dt
-    Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1]) / dt).reshape((-1, Xts.shape[2] - 1)) 
+    Ys = ((Xts[:, 1:, :-1] - Xts[:, :-1, :-1]) / 
+          (1 if stable else dt)).reshape((-1, Xts.shape[2] - 1)) 
 
     # Drop the last timepoint in each timeseries
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) 
@@ -62,7 +63,7 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
         rff_model = RandomFourierFeatures(Xs, Ys, num_features=num_rff_features,
                                           kernel=kernel, noise=noise, device=device,
                                           debug_rff=debug_rff)
-        return rff_model.drift
+        return lambda x: rff_model.drift(x) / (dt if stable else 1)
     elif nystrom:
         gp_drift_model = MultitaskGPModelSparse(
             Xs, Ys, dt=1, kern=kernel, noise=noise, 
@@ -70,12 +71,13 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
             num_time_points=num_time_points, device=device) 
 
     else:
-        gp_drift_model = MultitaskGPModel(Xs, Ys, dt=1, kern=kernel, noise=noise, 
-                                        gp_mean_function=gp_mean_function) 
+        gp_drift_model = MultitaskGPModel(Xs, Ys, dt=1 / (dt ** 2 if stable else 1), 
+                                          kern=kernel, noise=noise, 
+                                          gp_mean_function=gp_mean_function) 
     # fit_gp(gp_drift_model, num_steps=5) # Fit the drift
     
     def gp_ou_drift(x, debug=False):
-        return gp_drift_model.predict(x, debug=debug)
+        return gp_drift_model.predict(x, debug=debug) / (dt if stable else 1)
 
 #     # Extract mean drift
 #     gp_ou_drift = lambda x,debug: gp_drift_model.predict(x, debug=debug)  
@@ -144,7 +146,7 @@ def MLE_IPFP(
         kernel=gp.kernels.Exponential, observation_noise=1.0, decay_sigma=1, 
         div=1, gp_mean_prior_flag=False, log_dir=None, rff=False,
         verbose=0, langevin=False, nn=False, device=None, nystrom=False,
-        num_rff_features=100, debug_rff=False
+        num_rff_features=100, debug_rff=False, stable=False,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from 
@@ -237,7 +239,7 @@ def MLE_IPFP(
         num_time_points=num_time_points_prior, kernel=kernel, 
         noise=observation_noise, gp_mean_function=prior_drift, device=device,
         nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-        debug_rff=debug_rff
+        debug_rff=debug_rff, stable=stable
     )
     
     if plot and isinstance(sigma, (int, float)):
@@ -275,7 +277,7 @@ def MLE_IPFP(
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-            debug_rff=debug_rff
+            debug_rff=debug_rff, stable=stable
         )
         if verbose:
             print("Fitting drift solved in ", time.time() - t0)
@@ -300,7 +302,7 @@ def MLE_IPFP(
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-            debug_rff=debug_rff
+            debug_rff=debug_rff, stable=stable
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
             # but that doesnt work as well,
