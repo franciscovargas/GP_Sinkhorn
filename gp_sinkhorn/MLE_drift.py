@@ -21,7 +21,8 @@ from gp_sinkhorn.unet import get_trained_unet
 def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50, 
                  kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, 
                  nystrom=False, device=None, rff=False, num_rff_features=1000,
-                 debug_rff=False, stable=False, nn=False, nn_epochs=100,):
+                 debug_rff=False, stable=False, nn=False, nn_epochs=100,
+                 heteroskedastic=False):
     """
     This function transforms a set of timeseries into an autoregression problem 
     and estimates the drift function using GPs following:
@@ -46,6 +47,12 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
         from the boundary distributions
     :param num_time_points[int]: Number of inducing timesteps (inducing points) 
         for the EM approximation
+    :param heteroskedastic: Whether to use heteroskedastic (time-varying)
+        noise in the GP. When False, the GP uses the minimum sigma value as 
+        before; when True, *and* sigma is a tuple (if sigma is a scalar, this
+        argument has no effect), the same time-varying noise is used as in 
+        the SDE solver. TODO: make it work for RFF and Nystrom; currently they 
+        default to homoskedastic.        
     
     :return [nx(d+1) ndarray-> nxd ndarray]: returns fitted drift
     """
@@ -65,17 +72,35 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
     
     # Set up GP
     elif rff:
+        # Default to homoskedastic noise for now
+        noise = noise ** 2 if isinstance(noise, (int, float)) else noise[0] ** 2
         rff_model = RandomFourierFeatures(Xs, Ys, num_features=num_rff_features,
                                           kernel=kernel, noise=noise, device=device,
                                           debug_rff=debug_rff)
         return lambda x: rff_model.drift(x) / (dt if stable else 1)
     elif nystrom:
+        # Default to homoskedastic noise for now
+        noise = noise ** 2 if isinstance(noise, (int, float)) else noise[0] ** 2       
         gp_drift_model = MultitaskGPModelSparse(
             Xs, Ys, dt=1, kern=kernel, noise=noise, 
             gp_mean_function=gp_mean_function, num_data_points=num_data_points, 
             num_time_points=num_time_points, device=device) 
 
     else:
+        if isinstance(noise, (tuple, list)) and heteroskedastic:
+            # TODO: make one function for this instead of repeating code in SDE 
+            #       solve and here. 
+            assert len(noise) == 2
+            ti = torch.arange(N).double().to(device) * dt
+            sigma_min, sigma_max = noise
+            m = 2 * (sigma_max - sigma_min) / (N * dt)  # gradient
+            noise = (sigma_max - m * torch.abs(ti - (0.5 * N * dt))).double().to(device)
+            noise = noise ** 2  # Need to square noise as we no longer use 
+                                # observation_noise (which squares input noise)
+            noise = noise.repeat(Xts.shape[0])
+        else: 
+            noise = noise ** 2 if isinstance(noise, (int, float)) else noise[0] ** 2
+                
         gp_drift_model = MultitaskGPModel(Xs, Ys, dt=1 / (dt ** 2 if stable else 1), 
                                           kern=kernel, noise=noise, 
                                           gp_mean_function=gp_mean_function) 
@@ -152,7 +177,7 @@ def MLE_IPFP(
         div=1, gp_mean_prior_flag=False, log_dir=None, rff=False,
         verbose=0, langevin=False, nn=False, device=None, nystrom=False,
         num_rff_features=100, debug_rff=False, stable=False, nn_epochs=100,
-        log_file_name=None,
+        log_file_name=None, heteroskedastic=False
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from 
@@ -233,11 +258,16 @@ def MLE_IPFP(
     
     pow_ = int(math.floor(iteration / div))
 
-    if isinstance(sigma, tuple):
-        observation_noise = sigma[0] ** 2
-    else:
-        observation_noise = (sigma ** 2 if decay_sigma == 1.0 
-                             else (sigma * (decay_sigma ** pow_)) ** 2)
+    # This is now redundant; we do the squaring inside fit_drift_gp (note that
+    # we pass in sigma directly instead of observation_noise) and 
+    # decay_sigma is not currently supported. 
+    # if isinstance(sigma, tuple):
+    #     observation_noise = sigma[0] ** 2
+    # else:
+    #     observation_noise = (sigma ** 2 if decay_sigma == 1.0 
+    #                          else (sigma * (decay_sigma ** pow_)) ** 2)
+
+
     if langevin:
         d = sigma.shape[0]
         sigma[:int(d * 0.5)] = 0
@@ -259,9 +289,10 @@ def MLE_IPFP(
     drift_backward = fit_drift(
         Xts, N=N, dt=dt, num_data_points=num_data_points_prior,
         num_time_points=num_time_points_prior, kernel=kernel, 
-        noise=observation_noise, gp_mean_function=prior_drift, device=device,
+        noise=sigma, gp_mean_function=prior_drift, device=device,
         nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
         debug_rff=debug_rff, stable=stable, nn=nn, nn_epochs=nn_epochs,
+        heteroskedastic=heteroskedastic
     )
     
     if plot and isinstance(sigma, (int, float)):
@@ -299,10 +330,11 @@ def MLE_IPFP(
         drift_forward = fit_drift(
             Xts, N=N, dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, 
-            noise=observation_noise, device=device,
+            noise=sigma, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
             debug_rff=debug_rff, stable=stable, nn=nn, nn_epochs=nn_epochs,
+            heteroskedastic=heteroskedastic
         )
         if verbose:
             print("Fitting drift solved in ", time.time() - t0)
@@ -322,10 +354,11 @@ def MLE_IPFP(
         drift_backward = fit_drift(
             Xts, N=N, dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, 
-            noise=observation_noise, device=device,
+            noise=sigma, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
             debug_rff=debug_rff, stable=stable, nn=nn, nn_epochs=nn_epochs,
+            heteroskedastic=heteroskedastic
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
             # but that doesnt work as well,

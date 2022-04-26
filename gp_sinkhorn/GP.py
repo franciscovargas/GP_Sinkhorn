@@ -16,21 +16,22 @@ class GPRegression_fast(gp.models.GPRegression):
     def __init__(self, X, y, kernel, noise=None, mean_function=None, 
                  jitter=1e-6, precompute_inv=None):
         with torch.no_grad():
+            noise_min = noise[0] if noise.ndim == 1 else noise
             if isinstance(kernel, Product): 
                 kernel = deepcopy(kernel)
 
             self.mean_flag = mean_function
             if mean_function is not None:
                 super().__init__(X, y, kernel, mean_function=mean_function,
-                                 jitter=jitter, noise=noise)
+                                 jitter=jitter, noise=noise_min)
             else:
-                super().__init__(X, y, kernel, jitter=jitter, noise=noise)
+                super().__init__(X, y, kernel, jitter=jitter, noise=noise_min)
             if precompute_inv is None:
                 N = self.X.size(0)
                 Kff = self.kernel(self.X).contiguous()
 
                 # Add noise to diagonal
-                Kff.view(-1)[::N + 1] += self.jitter + self.noise 
+                Kff.view(-1)[::N + 1] += self.jitter + noise 
                 self.Kff_inv = torch.inverse(Kff)
             else:
                 self.Kff_inv = precompute_inv
@@ -110,8 +111,11 @@ class MultitaskGPModel():
             # changed from Matern32
             kernel = kern(input_dim=X.shape[1], variance=torch.tensor(1.0 / dt)) 
 
-        # if noise is multi dimensional select the right one
-        noise = [noise] * y.shape[1] if isinstance(noise, (int, float)) else noise  
+        # # if noise is multi dimensional select the right one
+        # # *We don't currently support this; can easily add back in if needed.*
+        # noise = [noise] * y.shape[1] if isinstance(noise, (int, float)) else noise  
+
+
         for i in range(y.shape[1]):
             gp_mean_function_i = (
                 (lambda xx: gp_mean_function(xx)[:, i].reshape(-1))
@@ -121,11 +125,11 @@ class MultitaskGPModel():
 #                     import pdb; pdb.set_trace()
             if i == 0:
                 gpr = GPRegression_fast(
-                    X, y[:, i], kernel, noise=torch.tensor(noise[i] / dt), 
+                    X, y[:, i], kernel, noise=noise / torch.tensor(dt), 
                     mean_function=gp_mean_function_i)
             else:
                 gpr = GPRegression_fast(
-                    X, y[:, i], kernel, noise=torch.tensor(noise[i] / dt),
+                    X, y[:, i], kernel, noise=noise / torch.tensor(dt),
                     precompute_inv=self.gpr_list[0].Kff_inv,
                     mean_function=gp_mean_function_i)
             self.gpr_list.append(gpr)
