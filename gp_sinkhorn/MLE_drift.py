@@ -5,6 +5,7 @@ import math
 import gc
 import copy
 import time
+import logging 
 
 from tqdm import tqdm
 
@@ -151,6 +152,7 @@ def MLE_IPFP(
         div=1, gp_mean_prior_flag=False, log_dir=None, rff=False,
         verbose=0, langevin=False, nn=False, device=None, nystrom=False,
         num_rff_features=100, debug_rff=False, stable=False, nn_epochs=100,
+        log_file_name=None,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from 
@@ -192,11 +194,18 @@ def MLE_IPFP(
         `num_data_points_prior`.
     :param decay_sigma[float]: Decay the noise sigma at each iteration.
     :param log_dir[str]: Directory to log the result. If None don't log.
+    :param log_file_name[str]: File to log progress on iterations, and other
+        useful debugging info as needed.
     
     :return: At the moment returning the fitted forwards and backwards 
         timeseries for plotting. However should also return the forwards and 
         backwards drifts. 
     """
+
+    if log_file_name is not None:
+        log = True
+        logging.basicConfig(filename=log_file_name, level=logging.INFO, force=True)
+        logging.info('Starting logging...')
 
     if prior_drift is None:
         def prior_drift(x):
@@ -286,7 +295,7 @@ def MLE_IPFP(
 
         del drift_backward
         gc.collect()
-        
+
         drift_forward = fit_drift(
             Xts, N=N, dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, 
@@ -336,6 +345,8 @@ def MLE_IPFP(
         gc.collect() # fixes odd memory leak
         if log_dir is not None:
             pickle.dump(result, open(f"{log_dir}/result_{i}.pkl" , "wb"))
+
+        logging.info(f"Completed iter {i + 1} of {iteration}")
     
     T2, M2 = solve_sde_RK(b_drift=drift_backward, sigma=sigma, X0=X_1, dt=dt, 
                           N=N, device=device)
@@ -352,5 +363,6 @@ def MLE_IPFP(
         auxiliary_plot_routine_end(Xts, t, prior_X_0, X_1, drift_backward, 
                                    sigma, N, dt, device)
         
+    logging.info("Done.")
     return result
 
