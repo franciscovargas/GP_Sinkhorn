@@ -14,12 +14,13 @@ from gp_sinkhorn.NN import Feedforward, train_nn
 from gp_sinkhorn.RFF import RandomFourierFeatures
 from gp_sinkhorn.utils import (auxiliary_plot_routine_init, 
                                auxiliary_plot_routine_end)
+from gp_sinkhorn.unet import get_trained_unet
 
 
 def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50, 
                  kernel=gp.kernels.RBF, noise=1.0, gp_mean_function=None, 
                  nystrom=False, device=None, rff=False, num_rff_features=1000,
-                 debug_rff=False, stable=False):
+                 debug_rff=False, stable=False, nn=False, nn_epochs=100,):
     """
     This function transforms a set of timeseries into an autoregression problem 
     and estimates the drift function using GPs following:
@@ -57,9 +58,12 @@ def fit_drift_gp(Xts, N, dt, num_data_points=10, num_time_points=50,
     # Drop the last timepoint in each timeseries
     Xs = Xts[:, :-1, :].reshape((-1, Xts.shape[2])) 
 
+    if nn:
+        return get_trained_unet(Xs, Ys, device=device, num_epochs=nn_epochs, 
+                                batch_size=100)
+    
     # Set up GP
-
-    if rff:
+    elif rff:
         rff_model = RandomFourierFeatures(Xs, Ys, num_features=num_rff_features,
                                           kernel=kernel, noise=noise, device=device,
                                           debug_rff=debug_rff)
@@ -146,7 +150,7 @@ def MLE_IPFP(
         kernel=gp.kernels.Exponential, observation_noise=1.0, decay_sigma=1, 
         div=1, gp_mean_prior_flag=False, log_dir=None, rff=False,
         verbose=0, langevin=False, nn=False, device=None, nystrom=False,
-        num_rff_features=100, debug_rff=False, stable=False,
+        num_rff_features=100, debug_rff=False, stable=False, nn_epochs=100,
     ):
     """
     This module runs the GP drift fit variant of IPFP it takes in samples from 
@@ -198,7 +202,16 @@ def MLE_IPFP(
         def prior_drift(x):
             return torch.tensor([0] * (x.shape[1] - 1)).reshape((1, -1)).repeat(x.shape[0], 1).to(device)
         
-    fit_drift = fit_drift_nn if nn else fit_drift_gp
+    # It is easier API wise to have a single function, as otherwise 
+    # distinguishing their parameters is fiddly (we can't just say fit_drift = 
+    # fit_drift_nn if nn else fit_drift_gp as they take very different params). 
+    # Can undo this later, especially if we want to use other types of NN like 
+    # Feedforward, but for now this helps with clarity. So fit_drift_nn is never 
+    # called. TODO: abstract all the params, so the 3 calls to fit_drift in this 
+    # function only differ in the Xts.
+    # fit_drift = fit_drift_nn if nn else fit_drift_gp
+    fit_drift = fit_drift_gp
+
     # Setup for the priors backwards drift estimate
     prior_X_0 = X_0 if prior_X_0 is None else prior_X_0        
     num_data_points_prior = (num_data_points if num_data_points_prior is None 
@@ -239,7 +252,7 @@ def MLE_IPFP(
         num_time_points=num_time_points_prior, kernel=kernel, 
         noise=observation_noise, gp_mean_function=prior_drift, device=device,
         nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-        debug_rff=debug_rff, stable=stable
+        debug_rff=debug_rff, stable=stable, nn=nn, nn_epochs=nn_epochs,
     )
     
     if plot and isinstance(sigma, (int, float)):
@@ -277,7 +290,7 @@ def MLE_IPFP(
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-            debug_rff=debug_rff, stable=stable
+            debug_rff=debug_rff, stable=stable, nn=nn, nn_epochs=nn_epochs,
         )
         if verbose:
             print("Fitting drift solved in ", time.time() - t0)
@@ -302,7 +315,7 @@ def MLE_IPFP(
             noise=observation_noise, device=device,
             gp_mean_function=(prior_drift if gp_mean_prior_flag else None), 
             nystrom=nystrom, rff=rff, num_rff_features=num_rff_features,
-            debug_rff=debug_rff, stable=stable
+            debug_rff=debug_rff, stable=stable, nn=nn, nn_epochs=nn_epochs,
             # One wouuld think this should (worth rethinking this)
             # be prior drift backwards here
             # but that doesnt work as well,
