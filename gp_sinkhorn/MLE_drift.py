@@ -284,6 +284,9 @@ def MLE_IPFP(
             print("Fit drift")
             t0 = time.time()
 
+        del drift_backward
+        gc.collect()
+        
         drift_forward = fit_drift(
             Xts, N=N, dt=dt, num_data_points=num_data_points,
             num_time_points=num_time_points, kernel=kernel, 
@@ -300,8 +303,6 @@ def MLE_IPFP(
         # HERE: HERE is where the GP prior kicks in and helps the most
         t, Xts = solve_sde_RK(b_drift=drift_forward, sigma=sigma, X0=X_0, dt=dt,
                               N=N, device=device)
-        del drift_backward
-        gc.collect()
         
         T = copy.deepcopy(t.clone().detach())
         M = copy.deepcopy(Xts.clone().detach())
